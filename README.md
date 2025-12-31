@@ -1,11 +1,10 @@
 <div align="center">
-
-<img src="https://github.com/RajeshTechForge/Sentinel-RAG/blob/main/assets/sentinel_rag.png" alt="header image">
+<img width="3000" height="607" alt="header_banner" src="https://github.com/user-attachments/assets/512c3c51-8ba3-41d1-a23b-915c42ad284c" />
 
 <br>
 <br>
 
-**Enterprise-Grade RAG with Role-Based Access Control & PII Protection**
+**SentinelRAG** is an enterprise-ready Retrieval-Augmented Generation (RAG) framework designed with a "Security-First" philosophy. It solves the critical gap in standard RAG implementations: **the lack of document-level permissions and data privacy.**
 
 *Because your AI shouldn't know more than your employees do.*
 
@@ -22,183 +21,170 @@
   </a>
 </p>
 
-[Features](#-key-features) • [Getting Started](#-getting-started)
+[Key Features](https://www.google.com/search?q=%23-key-features) • [Architecture](https://www.google.com/search?q=%23-architecture) • [Getting Started](https://www.google.com/search?q=%23-getting-started) • [Roadmap](https://www.google.com/search?q=%23-roadmap)
 
 </div>
 
+---
 
+## 🎯 The Challenge
 
-## 🎯 About
+**The "Intern vs. CEO" Problem**
 
-### The Problem
+Standard RAG systems treat all indexed documents as a flat pool of data. If an intern asks the system about executive compensation or private strategy decks, a typical RAG will happily retrieve that sensitive context.
 
-Companies have terabytes of internal data (PDFs, wikis, Slack logs) and want to use LLMs to query this knowledge. However, standard RAG (Retrieval Augmented Generation) systems have a critical flaw:
+**SentinelRAG** introduces a middleware layer that enforces:
 
-> **They treat all data equally.**
-
-If an intern asks *"What are the executive salary bands?"*, a typical RAG system will retrieve and answer from any document in the vector database—**even if the intern shouldn't have access to it.**
-
-This creates three major enterprise blockers:
-
-- 🚨 **The "Intern vs. CEO" Problem**: No permission boundaries at retrieval time
-- 🔓 **Data Leakage**: Sensitive PII accidentally sent to LLMs or returned to unauthorized users  
-- 📋 **Compliance Gaps**: No audit trail of who accessed what data and when
-
-### The Solution
-
-**SentinelRAG** is a Role-Based Access Control based RAG system that enforces **document-level security**, *before* data reaches the LLM. It combines:
-
-- [x] **Role-Based Access Control (RBAC)** at the vector search level  
-- [x] **Automatic PII redaction** to prevent sensitive data leaks  
-- [x] **Comprehensive audit logging** for compliance (GDPR, SOC 2, HIPAA)
+1. **RBAC at Retrieval:** Filters vector search results based on the user's roles.
+2. **PII Redaction:** Automatically masks sensitive entities (SSNs, Emails, API Keys) before they reach the LLM or the user.
+3. **Immutable Audit Logs:** Tracks every query, the documents retrieved, and the roles used for full compliance (GDPR/HIPAA).
 
 
 ## ✨ Key Features
 
-### Security First
+### 🔐 Multi-Tenant RBAC
 
-- **Dynamic Filtering**: Vector search queries are automatically filtered based on user roles and access level
+* **Metadata Filtering:** Injects role-based filters directly into the Vector DB query.
+* **Scoped Context:** Ensures the LLM only "sees" what the user is permitted to see.
 
-- **PII Detection & Redaction**: Automatically sanitizes sensetive information (SSNs, emails, phone numbers) from queries and responses
+### 🛡️ Privacy & Compliance
 
-### Developer Experience
+* **Automated PII Scrubbing:** Integrated sanitization layer for both input queries and output responses.
+* **Auditability:** Comprehensive logging to PostgreSQL for forensic analysis and usage monitoring.
 
-- **FastAPI Backend**: High-performance async Python API
-- **Fully Configurable**: File flags, Deperments, User role types and access level design, everything can be configurable according to need.
+### ⚡ Modern Python Stack
+
+* **FastAPI & Pydantic v2:** High-performance, type-safe asynchronous API.
+* **Powered by `uv`:** Lightning-fast dependency management and reproducible builds.
+* **Flexible Vector Backends:** Native support for `pgvector`, with Qdrant integration on the roadmap.
 
 
 ## 🏗️ Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Client ["🖥️ Frontend"]
-        User[👤 User: Junior Dev]
-        Admin[👤 User: HR Manager]
+    subgraph Client ["🖥️ Client Layer"]
+        User[👤 User / App]
     end
 
-    subgraph Middleware ["⚙️ API Gateway (FastAPI)"]
-        Auth[🔑 Auth Service JWT]
-        PII_Filter[🛡️ PII Redaction Layer]
-        Query_Engine[🔍 Query Construction]
+    subgraph Security_Gate ["🛡️ Sentinel Middleware"]
+        Auth[🔑 Auth & Role Extractor]
+        RBAC_Filter[⚖️ Dynamic Filter Generator]
+        PII_Proc[🔏 PII Redaction: Post-Retrieval]
     end
 
-    subgraph Data_Layer ["🗄️ Vector Database (Qdrant)"]
-        Public_Docs[📄 Public Docs]
-        HR_Docs[📄 HR Restricted]
-        Eng_Docs[📄 Engineering Restricted]
+    subgraph Knowledge_Base ["🗄️ Secure Vector Store"]
+        VDB[(pgvector / Qdrant)]
     end
 
-    subgraph AI_Layer ["🤖 Inference"]
-        LLM[🧠 LLM - OpenAI / Llama 3]
+    subgraph Intelligence ["🤖 Inference Engine"]
+        LLM[LLM: Local / Cloud]
     end
 
-    User -->|1. Query: 'What is the salary range?'| Auth
-    Auth -->|2. Attach Role: 'role:junior_dev'| PII_Filter
-    PII_Filter -->|3. Mask PII SSN/Names| Query_Engine
-    
-    Query_Engine -->|4. Vector Search + Filter: 'group IN public, dev'| Data_Layer
-    
-    Data_Layer -.->|5. ❌ BLOCKED: HR Docs| Query_Engine
-    Data_Layer -->|5. ✅ ALLOWED: Public Docs| Query_Engine
-    
-    Query_Engine -->|6. Context + Sanitized Query| LLM
-    LLM -->|7. Final Answer| User
+    %% Flow logic
+    User -->|1. Authenticated Query| Auth
+    Auth -->|2. Scoped Metadata| RBAC_Filter
+    RBAC_Filter -->|3. Filtered Search| VDB
+    VDB -->|4. Raw Context| PII_Proc
+    Auth -.->|5. Original Query| PII_Proc
+    PII_Proc -->|6. Clean Query + Context| LLM
+    LLM -->|7. Sanitized Response| User
+
 ```
-
-
-## 🛠️ Tech Stack
-
-| Component | Technology | Purpose |
-|:----------|:-----------|:--------|
-| **Backend** | ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white) ![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json) | High-performance async API framework |
-| **Database** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white) | Doument Data, Audit logs & user management |
-| **Vector DB** | **PgVector** / **Qdrant**(Upcoming)| Open-source vector search with metadata filtering |
-| **Deployment** | ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white) | Containerized deployment |
 
 
 ## 🚀 Getting Started
 
-Sentinel RAG uses `uv` for lightning-fast, reproducible dependency management.
+SentinelRAG utilizes [uv](https://github.com/astral-sh/uv) for high-speed dependency resolution.
 
-### 1. Prerequisites
-
-* **Python:** 3.10 or higher
-* **Docker & Docker Compose** (Optional, for deployment)
-* **PostgreSQL + PgVector** - *Ensure you have a running PostgreSQL instance with the PgVector extension installed.*
-
-### 2. Quick Installation
-
-First, ensure you have [uv installed](https://docs.astral.sh/uv/getting-started/installation/):
+### 1. Installation
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-```
-
-#### 2. Setup the Project
-
-You don't need to create a virtualenv manually. Just run `sync` to install dependencies and the `sentinel_rag` package:
-
-```bash
+# Clone the repository
 git clone https://github.com/RajeshTechForge/sentinel-rag.git
 cd sentinel-rag
+
+# Install dependencies and create environment
 uv sync
 
 ```
 
-### 3. Configuration
+### 2. Configuration
 
-Sentinel RAG uses a layered configuration system. Copy the example environment file to get started:
+Create a `.env` file based on the example:
 
 ```bash
 cp .env.example .env
 
 ```
 
-**Key Configuration Files:**
+Define your structure in your `config.json`:
 
-* `.env`: Local Database credentials and and Config file path.
+```json
+{
+    "DEPARTMENTS": ["finance", "hr", "engineering", "sales", "marketing"],
+    "ROLES": {
+        "finance": ["accountant", "financial_analyst"],
+        "hr": ["recruiter", "hr_manager"],
+    },
+    "ACCESS_MATRIX": {
+        "public": {
+            "finance": ["accountant", "financial_analyst"],
+        },
+        "internal": {},
+        "confidential": {}
+    }
+}
 
-To use a custom configuration, point to your file in the `.env`:
-`SENTINEL_CONFIG_PATH=/path/to/your/rbac_config.json`
+```
 
-#### 4. Initialize and Run
-
-Run your seeding script and start the API through the `uv` managed environment:
+### 3. Launch the API
 
 ```bash
-# Start the API
 uv run uvicorn sentinel_rag.api.app:app --reload
 
 ```
 
----
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| **Language** | Python 3.10+ |
+| **API Framework** | FastAPI (Async) |
+| **Data Validation** | Pydantic v2 |
+| **Package Manager** | uv |
+| **Vector Search** | pgvector (PostgreSQL) |
+| **Orchestration** | Docker & Docker Compose |
+
+
+## 🗺️ Roadmap
+
+* [x] Initial RBAC Logic for `pgvector`
+* [x] PII Redaction Middleware
+* [ ] Qdrant Vector DB Support
+* [ ] Support for LLMs calls
+* [ ] Admin Dashboard for Audit Log Visualization
+* [ ] Multi-modal RAG support (Images/PDFs)
+
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
+We love contributors! Whether you are fixing a bug or suggesting a feature, please follow these steps:
 
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes**: Follow the code style
-4. **Use it**: Test your changes befor commiting
-6. **Commit your changes**: `git commit -m 'feat: add amazing feature'`
-7. **Push to the branch**: `git push origin feature/amazing-feature`
-8. **Open a Pull Request**
+1. **Fork** the repo and create your branch.
+2. Ensure your code follows **PEP 8** and passes **Pyright/MyPy** checks.
+3. Submit a **Pull Request** with a detailed description of changes.
 
-### Development Guidelines
-
-- **Commit Messages**: Follow [Conventional Commits](https://www.conventionalcommits.org/)
-- **Documentation**: Update docstrings and README for new features
-- **Security**: Never commit API keys or credentials
+Check out [Contributing Guidelines](https://www.google.com/search?q=CONTRIBUTING.md) for more details.
 
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](https://github.com/RajeshTechForge/Sentinel-RAG/blob/main/LICENSE.md) file for details.
+Distributed under the **Apache License 2.0**. See [LICENSE](https://github.com/RajeshTechForge/Sentinel-RAG/blob/main/LICENSE.md) for more information.
 
 ---
 
 <div align="center">
-Made with ❤️ for enterprise AI security
+<p>Built with ❤️ for a more secure AI future.</p>
 </div>
