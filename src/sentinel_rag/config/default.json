@@ -1,0 +1,35 @@
+{
+    "DEPARTMENTS": ["finance", "hr", "engineering", "sales", "marketing"],
+
+    "ROLES": {
+        "finance": ["accountant", "financial_analyst", "finance_manager"],
+        "hr": ["recruiter", "hr_manager", "hr_director"],
+        "engineering": ["intern", "engineer", "senior_engineer", "engineering_manager"],
+        "sales": ["sales_representative", "sales_manager", "sales_director"],
+        "marketing": ["marketing_coordinator", "marketing_manager", "marketing_director"]
+    },
+    
+    "ACCESS_MATRIX": {
+        "public": {
+            "finance": ["accountant", "financial_analyst", "finance_manager"],
+            "hr": ["recruiter", "hr_manager", "hr_director"],
+            "engineering": ["intern", "engineer", "senior_engineer", "engineering_manager"],
+            "sales": ["sales_representative", "sales_manager", "sales_director"],
+            "marketing": ["marketing_coordinator", "marketing_manager", "marketing_director"]
+        },
+        "internal": {
+            "finance": ["financial_analyst", "finance_manager"],
+            "hr": ["hr_manager", "hr_director"],
+            "engineering": ["engineer", "senior_engineer", "engineering_manager"],
+            "sales": ["sales_manager", "sales_director"],
+            "marketing": ["marketing_manager", "marketing_director"]
+        },
+        "confidential": {
+            "finance": ["finance_manager"],
+            "hr": ["hr_director"],
+            "engineering": ["engineering_manager"],
+            "sales": ["sales_director"],
+            "marketing": ["marketing_director"]
+        }
+    }
+}
