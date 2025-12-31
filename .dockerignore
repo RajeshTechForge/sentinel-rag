@@ -1,0 +1,86 @@
+# ============================================
+#       DOCKER IGNORE FILE
+# ============================================
+# Excludes unnecessary files from Docker build context
+# for faster builds and smaller images.
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.manifest
+*.spec
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+test/
+tests/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Docker files (don't include in context)
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# uv cache
+.uv/
