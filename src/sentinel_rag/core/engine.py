@@ -17,7 +17,9 @@ class SentinelEngine:
             self.config_file = config_file
         else:
             try:
-                self.config_file = str(resources.files("sentinel_rag.config").joinpath("default.json"))
+                self.config_file = str(
+                    resources.files("sentinel_rag.config").joinpath("default.json")
+                )
                 print("Warning: No config file provided. Using default config.")
             except Exception as e:
                 raise EngineError(f"Failed to load default config file: {e}")
@@ -121,3 +123,8 @@ class SentinelEngine:
             return results
         except Exception as e:
             raise QueryError(f"Failed to execute query: {e}")
+
+    def close(self):
+        """Cleanup resources."""
+        if hasattr(self, "pii_manager"):
+            self.pii_manager.close()

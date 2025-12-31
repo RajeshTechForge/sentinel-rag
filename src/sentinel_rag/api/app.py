@@ -28,6 +28,24 @@ from sentinel_rag import (
 config = os.getenv("SENTINEL_CONFIG_PATH")
 
 
+# --- Configuration ---
+# Set this to False to disable audit logging
+ENABLE_AUDIT_LOGGING = False
+
+
+class MockAuditService:
+    """No-op audit service for when logging is disabled"""
+
+    async def log(self, entry):
+        return "mock_log_id"
+
+    async def log_auth(self, log_id, entry):
+        pass
+
+    async def log_query(self, log_id, entry):
+        pass
+
+
 # Global variables
 db = None
 engine = None
@@ -43,23 +61,28 @@ async def lifespan(app: FastAPI):
     db = DatabaseManager()
     engine = SentinelEngine(db=db, config_file=config)
 
-    # Initialize Audit Service (separate async connection pool)
-    audit_pool = await asyncpg.create_pool(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        database=os.getenv("POSTGRES_DB", "sample_db"),
-        user=os.getenv("POSTGRES_USER", "postgres"),
-        password=os.getenv("POSTGRES_PASSWORD", ""),
-        min_size=5,
-        max_size=10,
-    )
-    audit_service = AuditService(audit_pool)
-
-    print("✅ Audit logging initialized")
+    if ENABLE_AUDIT_LOGGING:
+        # Initialize Audit Service (separate async connection pool)
+        audit_pool = await asyncpg.create_pool(
+            host=os.getenv("POSTGRES_HOST", "localhost"),
+            port=int(os.getenv("POSTGRES_PORT", "5432")),
+            database=os.getenv("POSTGRES_DB", "sample_db"),
+            user=os.getenv("POSTGRES_USER", "postgres"),
+            password=os.getenv("POSTGRES_PASSWORD", ""),
+            min_size=5,
+            max_size=10,
+        )
+        audit_service = AuditService(audit_pool)
+        print("✅ Audit logging initialized")
+    else:
+        audit_service = MockAuditService()
+        print("⚠️ Audit logging disabled")
 
     yield
 
     # Cleanup
+    if engine:
+        engine.close()
     if audit_pool:
         await audit_pool.close()
 
@@ -75,7 +98,8 @@ app.add_middleware(
 )
 
 # Add Audit Middleware
-app.add_middleware(AuditLoggingMiddleware, audit_service=lambda: audit_service)
+if ENABLE_AUDIT_LOGGING:
+    app.add_middleware(AuditLoggingMiddleware, audit_service=lambda: audit_service)
 
 
 # --- Pydantic Models ---
@@ -538,4 +562,4 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "audit_enabled": audit_service is not None}
+    return {"status": "healthy", "audit_enabled": ENABLE_AUDIT_LOGGING}
