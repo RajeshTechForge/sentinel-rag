@@ -9,8 +9,8 @@
 *Because your AI shouldn't know more than your employees do.*
 
 
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://pydantic.dev)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)
 [![View My Profile](https://img.shields.io/badge/View-My_Profile-blue?logo=GitHub)](https://github.com/rajeshtechforge)
@@ -95,9 +95,53 @@ flowchart TD
 
 ## 🚀 Getting Started
 
+SentinelRAG offers two deployment options: **Docker** (recommended for quick setup) or **local installation** with `uv`.
+
+### Option A: Docker Deployment (Recommended)
+
+The fastest way to get SentinelRAG running with all dependencies pre-configured.
+
+#### 1. Clone & Launch
+
+```bash
+# Clone the repository
+git clone https://github.com/RajeshTechForge/sentinel-rag.git
+cd sentinel-rag
+
+# Build and start all services
+docker compose up --build
+```
+
+This command will:
+- Start a **PostgreSQL** database with the `pgvector` extension on port `5433` (mapped to avoid local conflicts)
+- Build and launch the **SentinelRAG API** on port `8000`
+
+#### 2. Verify Installation
+
+```bash
+# Health check
+curl http://localhost:8000/health
+```
+
+#### 3. Custom Configuration (Optional)
+
+To use a custom configuration file:
+
+```bash
+# Mount your config and lunch
+docker compose up --build -e SENTINEL_CONFIG_PATH=/app/config/custom.json
+
+# Or modify docker-compose.yml to mount your config file
+```
+
+
+### Option B: Local Installation
+
+For development or when you need more control over the environment.
+
 SentinelRAG utilizes [uv](https://github.com/astral-sh/uv) for high-speed dependency resolution.
 
-### 1. Installation
+#### 1. Installation
 
 ```bash
 # Clone the repository
@@ -106,44 +150,42 @@ cd sentinel-rag
 
 # Install dependencies and create environment
 uv sync
-
 ```
 
-### 2. Configuration
+#### 2. Configuration
 
 Create a `.env` file based on the example:
 
 ```bash
 cp .env.example .env
-
 ```
 
-Define your structure in your `config.json`:
+Define your organization's structure in `config.json`:
 
 ```json
+// maintain this structure
 {
     "DEPARTMENTS": ["finance", "hr", "engineering", "sales", "marketing"],
     "ROLES": {
         "finance": ["accountant", "financial_analyst"],
-        "hr": ["recruiter", "hr_manager"],
+        "hr": ["recruiter", "hr_manager"]
     },
     "ACCESS_MATRIX": {
         "public": {
-            "finance": ["accountant", "financial_analyst"],
+            "finance": ["accountant", "financial_analyst"]
         },
         "internal": {},
         "confidential": {}
     }
 }
-
 ```
 
-### 3. Launch the API
+#### 3. Launch the API
 
 ```bash
 uv run uvicorn sentinel_rag.api.app:app --reload
-
 ```
+> **Full API documentation:** [OpenAPI Spec](http://localhost:8000/docs) (available when running)
 
 
 ## 🛠️ Tech Stack
