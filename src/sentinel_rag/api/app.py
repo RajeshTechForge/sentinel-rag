@@ -30,7 +30,7 @@ config = os.getenv("SENTINEL_CONFIG_PATH")
 
 # --- Configuration ---
 # Set this to False to disable audit logging
-ENABLE_AUDIT_LOGGING = False
+ENABLE_AUDIT_LOGGING = True
 
 
 class MockAuditService:
@@ -169,14 +169,16 @@ async def get_user(request: UserLoginRequest, req: Request):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    user_info = db.get_user_role_and_department(str(user["user_id"]))
+    user_department, user_role = user_info[0]
     store_user_in_request(req, str(user["user_id"]), user["email"])
 
     return UserResponse(
         user_id=str(user["user_id"]),
         user_email=user["email"],
         full_name=user["full_name"],
-        user_role="sample_role",
-        user_department="sample_department",
+        user_role=user_role,
+        user_department=user_department,
     )
 
 
@@ -211,7 +213,8 @@ async def login_user(request: UserLoginRequest, req: Request):
 
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Store in request state
+    user_info = db.get_user_role_and_department(str(user["user_id"]))
+    user_department, user_role = user_info[0]
     store_user_in_request(req, str(user["user_id"]), user["email"])
 
     # Log successful login
@@ -242,8 +245,8 @@ async def login_user(request: UserLoginRequest, req: Request):
         user_id=str(user["user_id"]),
         user_email=user["email"],
         full_name=user["full_name"],
-        user_role="sample_role",
-        user_department="sample_department",
+        user_role=user_role,
+        user_department=user_department,
     )
 
 
@@ -254,13 +257,15 @@ async def create_user(request: UserCreateRequest, req: Request):
     try:
         # Check if user already exists to avoid error or handle gracefully
         existing_user = db.get_user_by_email(request.user_email)
+        user_info = db.get_user_role_and_department(str(existing_user["user_id"]))
+        user_department, user_role = user_info[0]
         if existing_user:
             return UserResponse(
                 user_id=str(existing_user["user_id"]),
                 user_email=existing_user["email"],
                 full_name=existing_user["full_name"],
-                user_role="sample_role",
-                user_department="sample_department",
+                user_role=user_role,
+                user_department=user_department,
             )
 
         # Check if role exists in department
