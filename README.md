@@ -144,6 +144,8 @@ cd sentinel-rag
 
 # Install dependencies and create environment
 uv sync
+# Install in editable mode
+uv python install -e .
 ```
 
 #### 2. Configuration

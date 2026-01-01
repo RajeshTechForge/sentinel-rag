@@ -48,14 +48,6 @@ COPY src/ ./src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Download spaCy model for PII Manager (presidio requirement)
-# Install AFTER uv sync so it doesn't get pruned by uv
-# Also install pip to prevent "No module named pip" errors if spacy tries to self-repair
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python /app/.venv/bin/python \
-    pip \
-    https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl
-
 
 # ----------------------------------------------
 #  STAGE 2: RUNNER
