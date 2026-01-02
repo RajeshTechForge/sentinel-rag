@@ -7,7 +7,7 @@ from langchain_community.embeddings import FakeEmbeddings
 from .seeder import seed_initial_data
 from .rbac_manager import RbacManager
 from .pii_manager import PiiManager
-from .document_loader import load_documents, split_documents
+from .document_processor import DocumentProcessor
 from .exceptions import EngineError, DocumentIngestionError, QueryError
 
 
@@ -28,6 +28,7 @@ class SentinelEngine:
         seed_initial_data(db=self.db, config_file=self.config_file)
         self.rbac = RbacManager(self.config_file)
         self.pii_manager = PiiManager()
+        self.doc_processor = DocumentProcessor()
         self.embeddings = FakeEmbeddings(size=1536)
 
     def ingest_documents(
@@ -41,22 +42,24 @@ class SentinelEngine:
     ):
         """Uploads documents from path or UploadFile, splits them, generates embeddings and stores in DB."""
 
-        documents = []
+        doc_content = []
         tmp_path = None
 
         try:
             if isinstance(source, str):
-                documents = load_documents(source)
+                doc_content = self.doc_processor.smart_doc_parser(source)
+
             elif hasattr(source, "filename") and hasattr(source, "file"):
                 # Handle UploadFile-like object
                 suffix = os.path.splitext(source.filename)[1]
                 with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                     shutil.copyfileobj(source.file, tmp)
                     tmp_path = tmp.name
-                documents = load_documents(tmp_path)
+                doc_content = self.doc_processor.smart_doc_parser(tmp_path)
                 # Update metadata to use original filename
-                for doc in documents:
+                for doc in doc_content:
                     doc.metadata["source"] = source.filename
+
             else:
                 raise DocumentIngestionError(
                     "Invalid source type provided. Expected file path or UploadFile object."
@@ -69,26 +72,27 @@ class SentinelEngine:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-        if not documents:
+        if not doc_content:
             raise DocumentIngestionError("No documents found in the provided source.")
 
-        texts = split_documents(documents)
-        if not texts:
+        doc_chunks = self.doc_processor.markdown_to_chunks(doc_content)
+        if not doc_chunks:
             raise DocumentIngestionError("No text chunks created from documents.")
 
         try:
             print("Generating embeddings...")
-            text_content = [doc.page_content for doc in texts]
+            text_content = [doc.page_content for doc in doc_chunks]
             embeddings = self.embeddings.embed_documents(text_content)
             # Ensure embedding is a list of standard floats to avoid numpy types
             embeddings = [[float(x) for x in emb] for emb in embeddings]
+
         except Exception as e:
             raise DocumentIngestionError(f"Failed to generate embeddings: {e}")
 
         try:
             print("Saving to database...")
             doc_id = self.db.save_documents(
-                texts,
+                doc_chunks,
                 embeddings,
                 title,
                 description,

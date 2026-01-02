@@ -5,7 +5,6 @@ This module provides domain-specific exceptions for better error handling
 and debugging across the application.
 """
 
-
 try:
     from ..exceptions import SentinelError
 except (ImportError, ValueError):
@@ -13,11 +12,13 @@ except (ImportError, ValueError):
     class CoreError(Exception):
         pass
 
+
 # Seeder Errors
 class SeederError(SentinelError or CoreError):
     """Base exception for seeder-related errors."""
 
     pass
+
 
 # RBAC Configuration Errors
 class RbacConfigError(SentinelError or CoreError):
@@ -32,6 +33,7 @@ class EngineError(SentinelError or CoreError):
 
     pass
 
+
 # Document Processing Errors
 class DocumentError(SentinelError or CoreError):
     """Base exception for document processing errors."""
@@ -39,8 +41,8 @@ class DocumentError(SentinelError or CoreError):
     pass
 
 
-class DocumentLoaderError(DocumentError):
-    """Exception raised when document loading fails."""
+class DocumentProcessorError(DocumentError):
+    """Exception raised when document processing fails."""
 
     pass
 
