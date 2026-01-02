@@ -27,8 +27,8 @@ class RbacManager:
                 )
 
             return access_matrix
-        
-        except json.JSONDecodeError as e:
+
+        except json.JSONDecodeError:
             raise RbacConfigError(
                 f"Invalid JSON in configuration file: '{config_file}'."
             )

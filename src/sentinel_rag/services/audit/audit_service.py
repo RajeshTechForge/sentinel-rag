@@ -5,9 +5,9 @@ Handles all audit trail requirements for enterprise RAG system
 
 import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import asyncpg

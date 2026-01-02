@@ -107,7 +107,7 @@ if ENABLE_AUDIT_LOGGING:
 
 class UserLoginRequest(BaseModel):
     user_email: str
-    user_id: str = None  # Optional for backward compatibility
+    user_id: str | None = None  # Optional for backward compatibility
 
 
 class UserCreateRequest(BaseModel):
@@ -134,7 +134,7 @@ class DocUploadResponse(BaseModel):
 
 class QueryRequest(BaseModel):
     user_query: str
-    user_id: str = None
+    user_id: str | None = None
     user_email: str
     k: int = 5
 

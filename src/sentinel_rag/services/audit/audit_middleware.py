@@ -7,7 +7,7 @@ from functools import wraps
 from typing import Callable, Optional
 from uuid import UUID
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .audit_service import (

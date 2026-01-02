@@ -12,7 +12,7 @@ from .exceptions import EngineError, DocumentIngestionError, QueryError
 
 
 class SentinelEngine:
-    def __init__(self, db=None, config_file: str = None):
+    def __init__(self, db=None, config_file: str | None = None):
         if config_file:
             self.config_file = config_file
         else:
