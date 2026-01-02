@@ -8,10 +8,16 @@ For production use, see app.py (FastAPI server).
 
 import os
 import sys
+import logging
 from typing import NoReturn
 
 from sentinel_rag import SentinelEngine
 from sentinel_rag import DatabaseManager
+
+
+# Configure logging to suppress verbose output
+logging.basicConfig(level=logging.WARNING, force=True)
+logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
 
 # Menu options
 OPTION_INGEST = "1"

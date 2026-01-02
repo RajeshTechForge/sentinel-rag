@@ -48,6 +48,11 @@ class PiiManager:
             max_workers=self.num_workers, initializer=initialize_worker
         )
 
+    def warm_up(self):
+        """Forces initialization of all workers to avoid latency on first request."""
+        dummy_chunks = ["warmup"] * self.num_workers
+        list(self.executor.map(process_chunk, dummy_chunks))
+
     def reduce_pii(self, chunks: list[str]):
         results = list(self.executor.map(process_chunk, chunks))
         return results

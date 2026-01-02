@@ -28,6 +28,7 @@ class SentinelEngine:
         seed_initial_data(db=self.db, config_file=self.config_file)
         self.rbac = RbacManager(self.config_file)
         self.pii_manager = PiiManager()
+        self.pii_manager.warm_up()
         self.doc_processor = DocumentProcessor()
         self.embeddings = FakeEmbeddings(size=1536)
 

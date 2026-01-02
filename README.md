@@ -20,7 +20,7 @@
   </a>
 </p>
 
-[Key Features](https://www.google.com/search?q=%23-key-features) • [Architecture](https://www.google.com/search?q=%23-architecture) • [Getting Started](https://www.google.com/search?q=%23-getting-started) • [Roadmap](https://www.google.com/search?q=%23-roadmap)
+[Key Features](#-key-features) • [Architecture](#-architecture) • [Getting Started](#-getting-started) • [Roadmap](#-roadmap)
 
 </div>
 
@@ -163,6 +163,10 @@ cp .env.example .env
 
 ```bash
 uv run uvicorn sentinel_rag.api.app:app --reload
+
+# if you want to test it without api, using your cli
+uv run -m test.cli
+
 ```
 > **Full API documentation:** [OpenAPI Spec](http://localhost:8000/docs) (available when running)
 
