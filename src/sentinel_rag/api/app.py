@@ -1,8 +1,9 @@
 import os
 from datetime import datetime
 import asyncpg
-from fastapi import FastAPI, UploadFile, HTTPException, Request, File, Form
+from fastapi import FastAPI, UploadFile, HTTPException, Request, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from contextlib import asynccontextmanager
@@ -11,6 +12,9 @@ from sentinel_rag import DatabaseManager
 from sentinel_rag import SentinelEngine
 
 from sentinel_rag import AuditLoggingMiddleware
+from sentinel_rag.api.auth_routes import router as auth_router
+from sentinel_rag.auth.oidc import get_current_active_user
+from sentinel_rag.auth.models import UserContext
 from sentinel_rag import (
     AuditService,
     AuditLogEntry,
@@ -30,7 +34,7 @@ config = os.getenv("SENTINEL_CONFIG_PATH")
 
 # --- Configuration ---
 # Set this to False to disable audit logging
-ENABLE_AUDIT_LOGGING = True
+ENABLE_AUDIT_LOGGING = False
 
 
 class MockAuditService:
@@ -89,6 +93,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sentinel RAG API", lifespan=lifespan)
 
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "super-secret-key"))
+app.include_router(auth_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -97,7 +104,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add Audit Middleware
 if ENABLE_AUDIT_LOGGING:
     app.add_middleware(AuditLoggingMiddleware, audit_service=lambda: audit_service)
 
@@ -439,20 +445,19 @@ async def upload_documents(
 
 
 @app.post("/query", response_model=List[DocumentResponse])
-async def query_documents(request: QueryRequest, req: Request):
+async def query_documents(request: QueryRequest, req: Request, user: UserContext = Depends(get_current_active_user)):
     client_info = extract_client_info(req)
     start_time = datetime.now()
 
-    store_user_in_request(req, request.user_id, request.user_email)
+    # Use authenticated user context
+    user_id = user.user_id
+    user_email = user.email
+    tenant_id = user.tenant_id
 
-    # 1. Verify user exists
-    user = db.get_user_by_email(request.user_email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user_id = str(user["user_id"])
+    store_user_in_request(req, user_id, user_email)
 
     try:
-        # 2. Perform RAG query
+        # 2. Perform RAG query with Tenant Isolation ---upcoming
         vector_search_start = datetime.now()
         results = engine.query(request.user_query, user_id=user_id, k=request.k)
         total_time = (datetime.now() - start_time).total_seconds() * 1000
@@ -498,7 +503,7 @@ async def query_documents(request: QueryRequest, req: Request):
         # 5. Log main audit entry
         main_entry = AuditLogEntry(
             user_id=user_id,
-            user_email=request.user_email,
+            user_email=user_email,
             ip_address=client_info["ip_address"],
             user_agent=client_info["user_agent"],
             session_id=client_info["session_id"],
@@ -514,6 +519,7 @@ async def query_documents(request: QueryRequest, req: Request):
                 "chunks_retrieved": len(results),
                 "k_requested": request.k,
                 "total_time_ms": round(total_time, 2),
+                "tenant_id": tenant_id
             },
         )
         log_id = await audit_service.log(main_entry)
@@ -528,7 +534,7 @@ async def query_documents(request: QueryRequest, req: Request):
             vector_search_time_ms=round(vector_time, 2),
             llm_processing_time_ms=0.0,  # don't have LLM yet
             total_response_time_ms=round(total_time, 2),
-            filters_applied={"user_id": user_id, "k": request.k},
+            filters_applied={"user_id": user_id, "k": request.k, "tenant_id": tenant_id},
             chunks_filtered=0,
         )
         await audit_service.log_query(log_id, query_entry)
@@ -543,7 +549,7 @@ async def query_documents(request: QueryRequest, req: Request):
         # Log failed query
         main_entry = AuditLogEntry(
             user_id=user_id,
-            user_email=request.user_email,
+            user_email=user_email,
             ip_address=client_info["ip_address"],
             event_category=EventCategory.DATA_ACCESS,
             event_type="rag_query",
