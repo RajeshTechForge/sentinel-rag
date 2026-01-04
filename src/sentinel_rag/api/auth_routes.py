@@ -1,118 +1,120 @@
-from fastapi import APIRouter, Request, HTTPException, Response, Depends
-from fastapi.responses import RedirectResponse, JSONResponse
-from sentinel_rag.auth.tenant_config import get_tenant_config_by_domain, get_tenant_config_by_id
-from sentinel_rag.auth.oidc import (
-    oauth, 
-    register_tenant_client, 
-    map_idp_groups_to_roles, 
-    create_access_token, 
-    ACCESS_TOKEN_EXPIRE_MINUTES
-)
-from sentinel_rag.auth.models import UserContext
-from datetime import timedelta
 import os
+import secrets
+from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter, Request, HTTPException, Response
+from fastapi.responses import RedirectResponse
+from authlib.jose import jwt
+from authlib.jose.errors import JoseError
+
+from sentinel_rag import (
+    TenantConfig,
+    register_tenant_client,
+    create_access_token,
+    SECRET_KEY,
+    ALGORITHM,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+)
+
+
+given_tenant_config: TenantConfig = {
+    "tenant_id": os.getenv("TENANT_ID"),
+    "domain": os.getenv("TENANT_DOMAIN"),
+    "oidc_config": {
+        "client_id": os.getenv("OIDC_CLIENT_ID"),
+        "client_secret": os.getenv("OIDC_CLIENT_SECRET"),
+        "server_metadata_url": os.getenv("OIDC_SERVER_METADATA_URL"),
+    },
+}
+
 
 router = APIRouter()
 
+
 @router.get("/login")
-async def login(request: Request, email: str):
-    """
-    Initiates the OIDC flow.
-    1. Extracts domain from email.
-    2. Finds Tenant Config.
-    3. Registers Client.
-    4. Redirects to IdP.
-    """
-    if "@" not in email:
-        raise HTTPException(status_code=400, detail="Invalid email format")
-    
-    domain = email.split("@")[1]
-    tenant_config = get_tenant_config_by_domain(domain)
-    
-    if not tenant_config:
-        raise HTTPException(status_code=404, detail=f"No tenant configuration found for domain {domain}")
-    
-    # Register the client dynamically
-    client = register_tenant_client(tenant_config)
-    
-    # Store tenant_id in session to retrieve it in callback
-    request.session["tenant_id"] = tenant_config.tenant_id
-    
-    # Build callback URL
-    # In production, this should be an env var or constructed properly
-    redirect_uri = request.url_for('auth_callback')
-    
-    return await client.authorize_redirect(request, redirect_uri)
+async def login(request: Request):
+    client = register_tenant_client(given_tenant_config)
+    redirect_uri = str(request.url_for("auth_callback"))
+
+    # Create secure state parameter
+    state_data = {
+        "tenant_id": given_tenant_config["tenant_id"],
+        "nonce": secrets.token_urlsafe(32),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    state_token = jwt.encode({"alg": ALGORITHM}, state_data, SECRET_KEY).decode("utf-8")
+    print(redirect_uri, state_token)
+    return await client.authorize_redirect(
+        request,
+        redirect_uri,
+        state=state_token,
+    )
+
 
 @router.get("/auth/callback", name="auth_callback")
 async def auth_callback(request: Request):
-    """
-    Handles OIDC callback.
-    1. Retrieves tenant_id from session.
-    2. Exchanges code for token.
-    3. Gets user info.
-    4. Maps roles.
-    5. Issues internal JWT.
-    """
-    tenant_id = request.session.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Session expired or invalid")
-    
-    tenant_config = get_tenant_config_by_id(tenant_id)
+    # Verify state parameter
+    state_token = request.query_params.get("state")
+    if not state_token:
+        raise HTTPException(status_code=400, detail="Missing state parameter")
+
+    try:
+        state_data = jwt.decode(state_token, SECRET_KEY)
+        state_data.validate()
+        state_time = datetime.fromisoformat(state_data["timestamp"])
+
+        if (datetime.now(timezone.utc) - state_time).seconds > 600:  # 10 min
+            raise HTTPException(status_code=400, detail="State expired")
+
+        tenant_id = state_data["tenant_id"]
+
+    except HTTPException:
+        raise
+    except JoseError:
+        raise HTTPException(status_code=400, detail="Invalid state parameter")
+
+    tenant_config = (
+        given_tenant_config if tenant_id == given_tenant_config["tenant_id"] else None
+    )
     if not tenant_config:
         raise HTTPException(status_code=404, detail="Tenant not found")
-        
-    # Re-register/Get client to ensure it exists in this worker process
+
     client = register_tenant_client(tenant_config)
-    
+
     try:
         token = await client.authorize_access_token(request)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"OIDC Error: {str(e)}")
-        
-    user_info = token.get('userinfo')
+    except Exception:
+        raise HTTPException(status_code=400, detail="Authentication failed")
+
+    user_info = token.get("userinfo")
     if not user_info:
-        # Sometimes userinfo is a separate call
         user_info = await client.userinfo(token=token)
-        
-    # Extract info
+
     email = user_info.get("email")
-    # 'groups' claim depends on IdP configuration. 
-    # Okta/Auth0 often need specific scopes or rules to include groups.
-    # We assume it's present for this exercise.
-    groups = user_info.get("groups", []) 
-    
-    # Map Roles
-    roles = map_idp_groups_to_roles(tenant_id, groups)
-    
-    # Create Internal User Context (could also sync to DB here)
-    # For this exercise, we'll just create the JWT
-    
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={
             "sub": email,
-            "user_id": email, # Using email as user_id for simplicity if sub is opaque
+            "user_id": "user_id",  # Mock user_id
             "tenant_id": tenant_id,
-            "roles": roles,
-            "department": "engineering" # Mock department or extract from claims
+            "roles": "sample_role",  # Mock role
+            "department": "sample_deparment",  # Mock department
         },
-        expires_delta=access_token_expires
+        expires_delta=access_token_expires,
     )
-    
-    response = RedirectResponse(url="/") # Redirect to frontend/home
-    
-    # Set HTTP-only cookie
+
+    response = RedirectResponse(url="/")
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True, # Should be True in prod
+        secure=True,
         samesite="lax",
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
-    
+
     return response
+
 
 @router.post("/logout")
 async def logout(response: Response):

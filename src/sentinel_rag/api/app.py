@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime
 import asyncpg
 from fastapi import FastAPI, UploadFile, HTTPException, Request, File, Form, Depends
@@ -13,8 +14,8 @@ from sentinel_rag import SentinelEngine
 
 from sentinel_rag import AuditLoggingMiddleware
 from sentinel_rag.api.auth_routes import router as auth_router
-from sentinel_rag.auth.oidc import get_current_active_user
-from sentinel_rag.auth.models import UserContext
+from sentinel_rag import get_current_active_user
+from sentinel_rag import UserContext
 from sentinel_rag import (
     AuditService,
     AuditLogEntry,
@@ -33,7 +34,6 @@ config = os.getenv("SENTINEL_CONFIG_PATH")
 
 
 # --- Configuration ---
-# Set this to False to disable audit logging
 ENABLE_AUDIT_LOGGING = False
 
 
@@ -91,9 +91,13 @@ async def lifespan(app: FastAPI):
         await audit_pool.close()
 
 
+# Configure logging to suppress verbose output
+logging.basicConfig(level=logging.WARNING, force=True)
+logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
+
 app = FastAPI(title="Sentinel RAG API", lifespan=lifespan)
 
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "super-secret-key"))
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
 app.include_router(auth_router)
 
 app.add_middleware(
@@ -188,146 +192,146 @@ async def get_user(request: UserLoginRequest, req: Request):
     )
 
 
-@app.post("/user/login", response_model=UserResponse)
-async def login_user(request: UserLoginRequest, req: Request):
-    client_info = extract_client_info(req)
-    user = db.get_user_by_email(request.user_email)
+# @app.post("/user/login", response_model=UserResponse)
+# async def login_user(request: UserLoginRequest, req: Request):
+#     client_info = extract_client_info(req)
+#     user = db.get_user_by_email(request.user_email)
 
-    if not user:
-        # Log failed login
-        main_entry = AuditLogEntry(
-            user_email=request.user_email,
-            ip_address=client_info["ip_address"],
-            user_agent=client_info["user_agent"],
-            event_category=EventCategory.AUTHENTICATION,
-            event_type="login_failure",
-            action=Action.LOGIN,
-            outcome=EventOutcome.FAILURE,
-            error_message="User not found",
-        )
-        log_id = await audit_service.log(main_entry)
+#     if not user:
+#         # Log failed login
+#         main_entry = AuditLogEntry(
+#             user_email=request.user_email,
+#             ip_address=client_info["ip_address"],
+#             user_agent=client_info["user_agent"],
+#             event_category=EventCategory.AUTHENTICATION,
+#             event_type="login_failure",
+#             action=Action.LOGIN,
+#             outcome=EventOutcome.FAILURE,
+#             error_message="User not found",
+#         )
+#         log_id = await audit_service.log(main_entry)
 
-        auth_entry = AuthAuditEntry(
-            email=request.user_email,
-            auth_method="email_only",
-            event_type="login_failure",
-            ip_address=client_info["ip_address"],
-            user_agent=client_info["user_agent"],
-            failed_attempts_count=1,
-        )
-        await audit_service.log_auth(log_id, auth_entry)
+#         auth_entry = AuthAuditEntry(
+#             email=request.user_email,
+#             auth_method="email_only",
+#             event_type="login_failure",
+#             ip_address=client_info["ip_address"],
+#             user_agent=client_info["user_agent"],
+#             failed_attempts_count=1,
+#         )
+#         await audit_service.log_auth(log_id, auth_entry)
 
-        raise HTTPException(status_code=404, detail="User not found")
+#         raise HTTPException(status_code=404, detail="User not found")
 
-    user_info = db.get_user_role_and_department(str(user["user_id"]))
-    user_department, user_role = user_info[0]
-    store_user_in_request(req, str(user["user_id"]), user["email"])
+#     user_info = db.get_user_role_and_department(str(user["user_id"]))
+#     user_department, user_role = user_info[0]
+#     store_user_in_request(req, str(user["user_id"]), user["email"])
 
-    # Log successful login
-    main_entry = AuditLogEntry(
-        user_id=user["user_id"],
-        user_email=user["email"],
-        ip_address=client_info["ip_address"],
-        user_agent=client_info["user_agent"],
-        session_id=client_info["session_id"],
-        event_category=EventCategory.AUTHENTICATION,
-        event_type="login_success",
-        action=Action.LOGIN,
-        outcome=EventOutcome.SUCCESS,
-    )
-    log_id = await audit_service.log(main_entry)
+#     # Log successful login
+#     main_entry = AuditLogEntry(
+#         user_id=user["user_id"],
+#         user_email=user["email"],
+#         ip_address=client_info["ip_address"],
+#         user_agent=client_info["user_agent"],
+#         session_id=client_info["session_id"],
+#         event_category=EventCategory.AUTHENTICATION,
+#         event_type="login_success",
+#         action=Action.LOGIN,
+#         outcome=EventOutcome.SUCCESS,
+#     )
+#     log_id = await audit_service.log(main_entry)
 
-    auth_entry = AuthAuditEntry(
-        user_id=user["user_id"],
-        email=user["email"],
-        auth_method="email_only",
-        event_type="login_success",
-        ip_address=client_info["ip_address"],
-        user_agent=client_info["user_agent"],
-    )
-    await audit_service.log_auth(log_id, auth_entry)
+#     auth_entry = AuthAuditEntry(
+#         user_id=user["user_id"],
+#         email=user["email"],
+#         auth_method="email_only",
+#         event_type="login_success",
+#         ip_address=client_info["ip_address"],
+#         user_agent=client_info["user_agent"],
+#     )
+#     await audit_service.log_auth(log_id, auth_entry)
 
-    return UserResponse(
-        user_id=str(user["user_id"]),
-        user_email=user["email"],
-        full_name=user["full_name"],
-        user_role=user_role,
-        user_department=user_department,
-    )
+#     return UserResponse(
+#         user_id=str(user["user_id"]),
+#         user_email=user["email"],
+#         full_name=user["full_name"],
+#         user_role=user_role,
+#         user_department=user_department,
+#     )
 
 
-@app.post("/user/create", response_model=UserResponse)
-async def create_user(request: UserCreateRequest, req: Request):
-    client_info = extract_client_info(req)
+# @app.post("/user/create", response_model=UserResponse)
+# async def create_user(request: UserCreateRequest, req: Request):
+#     client_info = extract_client_info(req)
 
-    try:
-        # Check if user already exists to avoid error or handle gracefully
-        existing_user = db.get_user_by_email(request.user_email)
-        user_info = db.get_user_role_and_department(str(existing_user["user_id"]))
-        user_department, user_role = user_info[0]
-        if existing_user:
-            return UserResponse(
-                user_id=str(existing_user["user_id"]),
-                user_email=existing_user["email"],
-                full_name=existing_user["full_name"],
-                user_role=user_role,
-                user_department=user_department,
-            )
+#     try:
+#         # Check if user already exists to avoid error or handle gracefully
+#         existing_user = db.get_user_by_email(request.user_email)
+#         user_info = db.get_user_role_and_department(str(existing_user["user_id"]))
+#         user_department, user_role = user_info[0]
+#         if existing_user:
+#             return UserResponse(
+#                 user_id=str(existing_user["user_id"]),
+#                 user_email=existing_user["email"],
+#                 full_name=existing_user["full_name"],
+#                 user_role=user_role,
+#                 user_department=user_department,
+#             )
 
-        # Check if role exists in department
-        available_roles = db.get_roles_by_department(request.user_department)
-        if not available_roles:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Department '{request.user_department}' not found or has no roles",
-            )
+#         # Check if role exists in department
+#         available_roles = db.get_roles_by_department(request.user_department)
+#         if not available_roles:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Department '{request.user_department}' not found or has no roles",
+#             )
 
-        if request.user_role not in available_roles:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Role '{request.user_role}' not found in department '{request.user_department}'",
-            )
+#         if request.user_role not in available_roles:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Role '{request.user_role}' not found in department '{request.user_department}'",
+#             )
 
-        uid = db.create_user(request.user_email, request.full_name)
-        db.assign_role(uid, request.user_role, request.user_department)
+#         uid = db.create_user(request.user_email, request.full_name)
+#         db.assign_role(uid, request.user_role, request.user_department)
 
-        # Store in request state
-        store_user_in_request(req, uid, request.user_email)
+#         # Store in request state
+#         store_user_in_request(req, uid, request.user_email)
 
-        # Log user creation
-        main_entry = AuditLogEntry(
-            user_email=request.user_email,
-            ip_address=client_info["ip_address"],
-            user_agent=client_info["user_agent"],
-            event_category=EventCategory.ADMIN,
-            event_type="user_creation",
-            action=Action.WRITE,
-            outcome=EventOutcome.SUCCESS,
-            resource_type=ResourceType.USER,
-            resource_id=uid,
-            resource_name=request.user_email,
-            department_name=request.user_department,
-            role_name=request.user_role,
-            metadata={
-                "full_name": request.full_name,
-                "department": request.user_department,
-                "role": request.user_role,
-            },
-        )
-        await audit_service.log(main_entry)
+#         # Log user creation
+#         main_entry = AuditLogEntry(
+#             user_email=request.user_email,
+#             ip_address=client_info["ip_address"],
+#             user_agent=client_info["user_agent"],
+#             event_category=EventCategory.ADMIN,
+#             event_type="user_creation",
+#             action=Action.WRITE,
+#             outcome=EventOutcome.SUCCESS,
+#             resource_type=ResourceType.USER,
+#             resource_id=uid,
+#             resource_name=request.user_email,
+#             department_name=request.user_department,
+#             role_name=request.user_role,
+#             metadata={
+#                 "full_name": request.full_name,
+#                 "department": request.user_department,
+#                 "role": request.user_role,
+#             },
+#         )
+#         await audit_service.log(main_entry)
 
-        return UserResponse(
-            user_id=uid,
-            user_email=request.user_email,
-            full_name=request.full_name,
-            user_role=request.user_role,
-            user_department=request.user_department,
-        )
+#         return UserResponse(
+#             user_id=uid,
+#             user_email=request.user_email,
+#             full_name=request.full_name,
+#             user_role=request.user_role,
+#             user_department=request.user_department,
+#         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/user/docs", response_model=List[Dict])
@@ -445,7 +449,11 @@ async def upload_documents(
 
 
 @app.post("/query", response_model=List[DocumentResponse])
-async def query_documents(request: QueryRequest, req: Request, user: UserContext = Depends(get_current_active_user)):
+async def query_documents(
+    request: QueryRequest,
+    req: Request,
+    user: UserContext = Depends(get_current_active_user),
+):
     client_info = extract_client_info(req)
     start_time = datetime.now()
 
@@ -519,7 +527,7 @@ async def query_documents(request: QueryRequest, req: Request, user: UserContext
                 "chunks_retrieved": len(results),
                 "k_requested": request.k,
                 "total_time_ms": round(total_time, 2),
-                "tenant_id": tenant_id
+                "tenant_id": tenant_id,
             },
         )
         log_id = await audit_service.log(main_entry)
@@ -534,7 +542,11 @@ async def query_documents(request: QueryRequest, req: Request, user: UserContext
             vector_search_time_ms=round(vector_time, 2),
             llm_processing_time_ms=0.0,  # don't have LLM yet
             total_response_time_ms=round(total_time, 2),
-            filters_applied={"user_id": user_id, "k": request.k, "tenant_id": tenant_id},
+            filters_applied={
+                "user_id": user_id,
+                "k": request.k,
+                "tenant_id": tenant_id,
+            },
             chunks_filtered=0,
         )
         await audit_service.log_query(log_id, query_entry)
