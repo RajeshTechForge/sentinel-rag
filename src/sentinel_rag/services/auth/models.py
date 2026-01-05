@@ -17,5 +17,5 @@ class UserContext(BaseModel):
     user_id: str
     email: str
     tenant_id: str
-    roles: str
+    role: str
     department: str
