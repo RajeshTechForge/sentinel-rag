@@ -12,6 +12,15 @@ from .services.audit.audit_service import (
     ResourceType,
     extract_client_info,
 )
+from .services.auth.models import TenantConfig, UserContext
+from .services.auth.oidc import (
+    get_current_active_user,
+    register_tenant_client,
+    create_access_token,
+    SECRET_KEY,
+    ALGORITHM,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+)
 
 __all__ = [
     "SentinelEngine",
@@ -26,4 +35,12 @@ __all__ = [
     "Action",
     "ResourceType",
     "extract_client_info",
+    "TenantConfig",
+    "UserContext",
+    "get_current_active_user",
+    "register_tenant_client",
+    "create_access_token",
+    "SECRET_KEY",
+    "ALGORITHM",
+    "ACCESS_TOKEN_EXPIRE_MINUTES",
 ]

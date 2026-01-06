@@ -7,7 +7,7 @@
 <br>
 <br>
 
-Sentine lRAG is built on the principle of **Least Privilege**. This document outlines how to configure the Role-Based Access Control (RBAC) system, define data classifications, and integrate these policies into the Sentinel engine.
+Sentinel RAG is built on the principle of **Least Privilege**. This document outlines how to configure the Role-Based Access Control (RBAC) system, define data classifications, and integrate these policies into the Sentinel engine.
 
 ## 🏗️ Core Concepts
 
