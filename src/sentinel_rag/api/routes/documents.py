@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from sentinel_rag import get_current_active_user, UserContext
 from sentinel_rag.api.dependencies import (
-    DatabaseDep,
     EngineDep,
     AuditServiceDep,
     RequestContextDep,
@@ -30,7 +29,6 @@ router = APIRouter()
 
 @router.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
-    db: DatabaseDep,
     engine: EngineDep,
     audit: AuditServiceDep,
     context: RequestContextDep,

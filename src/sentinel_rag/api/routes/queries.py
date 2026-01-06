@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends
 from sentinel_rag import get_current_active_user, UserContext
 from sentinel_rag.exceptions import DocumentProcessingError
 from sentinel_rag.api.dependencies import (
-    DatabaseDep,
     EngineDep,
     AuditServiceDep,
     RequestContextDep,
@@ -33,7 +32,6 @@ router = APIRouter()
 @router.post("", response_model=List[DocumentResponse])
 async def query_documents(
     request: QueryRequest,
-    db: DatabaseDep,
     engine: EngineDep,
     audit: AuditServiceDep,
     context: RequestContextDep,

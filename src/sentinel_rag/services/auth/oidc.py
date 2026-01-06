@@ -61,6 +61,8 @@ async def get_current_active_user(request: Request) -> UserContext:
     1. Authorization header (Bearer token) - for API clients
     2. Cookie (access_token) - for browser SPAs
     """
+    token = None
+
     # Priority 1: Check Authorization header first
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):

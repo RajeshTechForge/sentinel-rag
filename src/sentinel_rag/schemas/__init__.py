@@ -45,27 +45,6 @@ class UserBase(BaseSchema):
     full_name: str = Field(min_length=1, max_length=255)
 
 
-class UserLoginRequest(BaseSchema):
-    """Request model for user login/lookup."""
-
-    user_email: EmailStr
-    user_id: Optional[str] = None  # Optional for backward compatibility
-
-
-class UserCreateRequest(UserBase):
-    """Request model for creating a new user."""
-
-    user_role: str = Field(min_length=1, max_length=100)
-    user_department: str = Field(min_length=1, max_length=100)
-
-    @field_validator("user_role", "user_department")
-    @classmethod
-    def validate_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Field cannot be empty or whitespace")
-        return v.strip()
-
-
 class UserResponse(UserBase):
     """Response model for user data."""
 
@@ -74,37 +53,9 @@ class UserResponse(UserBase):
     user_department: str
 
 
-class UserDocumentsRequest(BaseSchema):
-    """Request for fetching user's documents."""
-
-    user_email: EmailStr
-
-
 # ============================================
 # DOCUMENT SCHEMAS
 # ============================================
-
-
-class DocumentUploadRequest(BaseSchema):
-    """
-    Document upload metadata.
-    Note: File is handled separately via UploadFile.
-    """
-
-    doc_title: str = Field(min_length=1, max_length=500)
-    doc_description: str = Field(max_length=2000, default="")
-    user_email: EmailStr
-    doc_department: str = Field(min_length=1, max_length=100)
-    doc_classification: str = Field(min_length=1, max_length=50)
-
-    @field_validator("doc_classification")
-    @classmethod
-    def validate_classification(cls, v: str) -> str:
-        valid_classifications = {"public", "internal", "confidential", "restricted"}
-        if v.lower() not in valid_classifications:
-            raise ValueError(f"Classification must be one of: {valid_classifications}")
-        return v.lower()
-
 
 class DocumentUploadResponse(BaseSchema):
     """Response after successful document upload."""
@@ -152,8 +103,6 @@ class QueryRequest(BaseSchema):
     """Request model for RAG queries."""
 
     user_query: str = Field(min_length=1, max_length=5000)
-    user_email: EmailStr
-    user_id: Optional[str] = None  # Optional, use authenticated user
     k: int = Field(default=5, ge=1, le=50)
 
     @field_validator("user_query")
