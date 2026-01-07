@@ -4,13 +4,12 @@
 <br>
 <br>
 
-**Sentinel RAG** is an enterprise-ready RAG framework designed with a "Security-First" philosophy. It solves the critical gap in standard RAG implementations: **the lack of document-level permissions and data privacy.**
+**Sentinel RAG** is an enterprise-ready RAG framework designed with "Security-First" philosophy. It solves the critical gap in standard RAG implementations: **lack of document-level permissions and data privacy.**
 
 *The "Security-First" RAG Framework for Modern Enterprises*
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://pydantic.dev)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)
 [![View My Profile](https://img.shields.io/badge/View-My_Profile-blue?logo=GitHub)](https://github.com/rajeshtechforge)
@@ -38,17 +37,13 @@ Most RAG implementations treat your knowledge base as a flat file system. When a
 
 ## ✨ Key Features
 
-### 🔐 Contextual RBAC (Role-Based Access Control)
+- ⚖️ **Contextual Role-Based Access Control(RBAC):** Unlike standard vector searches, Sentinel RAG injects **dynamic metadata filters** into the retrieval process. It matches the user's JWT/Session roles against document-level permissions in real-time.
 
-Unlike standard vector searches, Sentinel RAG injects **dynamic metadata filters** into the retrieval process. It matches the user's JWT/Session roles against document-level permissions in real-time.
+- 🛡️ **Automated PII Sanitization:** Built-in middleware automatically detects and masks sensitive entities using high-performance regex and NER (Named Entity Recognition) models before context is sent to the LLM.
 
-### 🛡️ Automated PII Sanitization
+- 🔐 **Enterprise-Ready Authentication** Single-tenant OIDC authentication with JWT-based authorization, supporting both cookie (browser) and Bearer token (API) authentication methods.
 
-Built-in middleware automatically detects and masks sensitive entities (SSNs, API Keys, Personal Emails) using high-performance regex and NER (Named Entity Recognition) models before context is sent to the LLM.
-
-### 📝 Immutable Compliance Logging
-
-Every request is audited. Sentinel RAG logs the user identity, the specific document chunks retrieved, and the sanitized prompt, providing a full trail for GDPR, HIPAA, and SOC2 compliance.
+- 📝 **Immutable Compliance Logging:** Every request is audited. Sentinel RAG logs the user identity, the specific document chunks retrieved, and the sanitized prompt, providing a full trail for GDPR, HIPAA, and SOC2 compliance.
 
 ### ⚡ Performance-First Stack
 
@@ -66,7 +61,7 @@ flowchart TD
     end
 
     subgraph Security_Gate ["🛡️ Sentinel Middleware"]
-        Auth[🔑 Auth & Role Extractor]
+        Auth[🔑 Auth Extractor]
         RBAC_Filter[⚖️ Dynamic Filter Generator]
         PII_Proc[🔏 PII Redaction: Post-Retrieval]
     end
@@ -119,16 +114,6 @@ This command will:
 ```bash
 # Health check
 curl http://localhost:8000/health
-```
-
-#### 3. Custom Configuration (Optional)
-
-To use a custom configuration file:
-
-```bash
-# Mount your config and lunch
-docker compose up --build -e SENTINEL_CONFIG_PATH=/app/config/custom.json
-
 ```
 
 
@@ -187,14 +172,12 @@ uv run -m test.cli
 > The system currently utilizes LangChain's FakeEmbeddings for demonstration purposes.
 
 
-## 🗺️ Roadmap
+## 📚 Documentations
 
-* [x] Initial RBAC Logic for `pgvector`
-* [x] PII Redaction Middleware
-* [ ] Qdrant Vector DB Support
-* [ ] Support for LLMs calls
-* [ ] Admin Dashboard for Audit Log Visualization
-* [ ] Multi-modal RAG support (Images/PDFs)
+- [API Guide](docs/API_GUIDE.md)
+- [CONFIGURATION Guide](docs/CONFIGURATION.md)
+- [COMPLIANCE Guide](docs/COMPLIANCE.md)
+- [CONTRIBUTING Guidelines](CONTRIBUTING.md)
 
 
 ## 🤝 Contributing
