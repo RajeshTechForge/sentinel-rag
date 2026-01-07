@@ -17,10 +17,8 @@ services:
     image: pgvector/pgvector:pg16
     container_name: sentinel-postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: sentinel_rag
-      POSTGRES_USER: sentinel
-      POSTGRES_PASSWORD: sentinel_secure_password
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -46,23 +44,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Load environment variables from .env file
+    env_file:
+      - .env
     environment:
-      # PostgreSQL connection (matches postgres service)
+      # Infrastructure-specific overrides (Take precedence over .env)
       POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: sentinel_rag
-      POSTGRES_USER: sentinel
-      POSTGRES_PASSWORD: sentinel_secure_password
-      # Config file path (optional - uses default if not set)
-      # Mount your custom config and set this path
-      SENTINEL_CONFIG_PATH: ${SENTINEL_CONFIG_PATH:-}
+      # The App INSIDE the container will always find the config here
+      SENTINEL_CONFIG_PATH: /app/config/runtime_config.json
     ports:
       - "8000:8000"
     volumes:
-      # Optional: Mount custom configuration file
-      # - ./your-config.json:/app/config/custom.json:ro
-      # Then set SENTINEL_CONFIG_PATH=/app/config/custom.json
-      []
+      # Map the Host path (from .env) to the Container path
+      - ${SENTINEL_CONFIG_PATH:-./src/sentinel_rag/config/default.json}:/app/config/runtime_config.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

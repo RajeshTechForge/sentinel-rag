@@ -18,7 +18,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # uv configuration
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never
+    UV_PYTHON_DOWNLOADS=never \
+    UV_HTTP_TIMEOUT=500
 
 # Install build dependencies (ordered for cache efficiency)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -64,14 +65,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
     VIRTUAL_ENV="/app/.venv" \
     PYTHONPATH="/app/src" \
-    # Default PostgreSQL configuration (for local/docker-compose use)
-    POSTGRES_HOST="postgres" \
-    POSTGRES_PORT="5432" \
-    POSTGRES_DB="sentinel_rag" \
-    POSTGRES_USER="sentinel" \
-    POSTGRES_PASSWORD="sentinel_secure_password" \
-    # Sentinel configuration (uses bundled default if not provided)
-    SENTINEL_CONFIG_PATH=""
+    # Sentinel configuration
+    SENTINEL_CONFIG_PATH="/app/config/default.json"
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
