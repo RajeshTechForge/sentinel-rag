@@ -1,22 +1,14 @@
-"""
-Sentinel RAG API - Application Factory.
-
-This module contains ONLY the FastAPI application factory.
-All business logic, routes, and configuration are imported from other modules.
-"""
-
 import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from sentinel_rag.api.dependencies import app_lifespan
-from sentinel_rag.api.exception_handlers import register_exception_handlers
-from sentinel_rag.api.routes import api_router, auth_router_root, health_router_root
-from sentinel_rag.config.settings import get_settings
-from sentinel_rag import AuditLoggingMiddleware
-from sentinel_rag.api.dependencies import get_app_state
+from .dependencies import get_app_state, app_lifespan
+from .exception_handlers import register_exception_handlers
+from .routes import api_router, auth_router_root, health_router_root
+
+from sentinel_rag.config import get_settings
+from sentinel_rag.services.audit import AuditLoggingMiddleware
 
 
 def create_application() -> FastAPI:
@@ -48,9 +40,8 @@ def create_application() -> FastAPI:
         openapi_url="/openapi.json" if not settings.is_production else None,
     )
 
-    # ============================================
-    # MIDDLEWARE (order matters - last added = first executed)
-    # ============================================
+    #        MIDDLEWARE
+    # ---------------------------
 
     # Audit logging middleware (first to execute)
     if settings.audit.enabled:
@@ -74,14 +65,12 @@ def create_application() -> FastAPI:
         secret_key=settings.security.secret_key,
     )
 
-    # ============================================
-    # EXCEPTION HANDLERS
-    # ============================================
+    #      EXCEPTION HANDLERS
+    # ----------------------------
     register_exception_handlers(app)
 
-    # ============================================
-    # ROUTES
-    # ============================================
+    #       ROUTES
+    # ----------------------------
 
     app.include_router(health_router_root)
     app.include_router(auth_router_root)
@@ -90,13 +79,11 @@ def create_application() -> FastAPI:
     return app
 
 
-# Create the application instance
 app = create_application()
 
 
-# ============================================
-# FOR DEVELOPMENT / TESTING
-# ============================================
+#    FOR DEVELOPMENT / TESTING
+# ----------------------------------
 
 
 def create_test_application(**overrides) -> FastAPI:
@@ -108,6 +95,4 @@ def create_test_application(**overrides) -> FastAPI:
     Usage:
         app = create_test_application(debug=True, audit_enabled=False)
     """
-    # This would use dependency injection to override settings
-    # For now, just return the regular app
     return create_application()

@@ -1,26 +1,21 @@
-"""
-Document Routes.
-
-Handles document upload and retrieval endpoints.
-"""
-
 from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from sentinel_rag import get_current_active_user, UserContext
-from sentinel_rag.api.dependencies import (
-    EngineDep,
-    AuditServiceDep,
-    RequestContextDep,
-)
-from sentinel_rag.schemas import DocumentUploadResponse
-from sentinel_rag.exceptions import DocumentProcessingError
-from sentinel_rag import (
+from sentinel_rag.services.auth import get_current_active_user, UserContext
+from sentinel_rag.services.audit import (
     AuditLogEntry,
     EventCategory,
     EventOutcome,
     Action,
     ResourceType,
+)
+
+from sentinel_rag.exceptions import DocumentProcessingError
+from sentinel_rag.api.schema import DocumentUploadResponse
+from sentinel_rag.api.dependencies import (
+    EngineDep,
+    AuditServiceDep,
+    RequestContextDep,
 )
 
 

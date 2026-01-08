@@ -1,11 +1,5 @@
 """
 Centralized Configuration Management using Pydantic Settings.
-
-Benefits:
-- Type-safe configuration
-- Automatic environment variable loading
-- Validation at startup (fail fast)
-- Easy testing with dependency injection
 """
 
 from functools import lru_cache

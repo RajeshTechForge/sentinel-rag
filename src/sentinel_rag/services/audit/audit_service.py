@@ -1,23 +1,12 @@
-"""
-Audit Logging Service for Compliance (GDPR, SOC 2, HIPAA)
-Handles all audit trail requirements for enterprise RAG system
-"""
-
 import hashlib
 import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
-
 import asyncpg
 from fastapi import Request
 from pydantic import BaseModel, Field
-
-
-# ============================================
-# ENUMS FOR TYPE SAFETY
-# ============================================
 
 
 class EventCategory(str, Enum):
@@ -55,9 +44,8 @@ class ResourceType(str, Enum):
     SYSTEM = "system"
 
 
-# ============================================
-# PYDANTIC MODELS
-# ============================================
+#       PYDANTIC MODELS
+# ---------------------------------
 
 
 class AuditLogEntry(BaseModel):
@@ -162,9 +150,8 @@ class ModificationAuditEntry(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
-# ============================================
-# AUDIT SERVICE CLASS
-# ============================================
+#       AUDIT SERVICE CLASS
+# ------------------------------------
 
 
 class AuditService:
@@ -176,9 +163,8 @@ class AuditService:
     def __init__(self, db_pool: asyncpg.Pool):
         self.db_pool = db_pool
 
-    # ----------------------------------------
     # MAIN AUDIT LOG
-    # ----------------------------------------
+    # --------------
 
     async def log(self, entry: AuditLogEntry) -> UUID:
         """
@@ -232,9 +218,8 @@ class AuditService:
 
         return log_id
 
-    # ----------------------------------------
     # QUERY AUDIT
-    # ----------------------------------------
+    # ------------
 
     async def log_query(self, main_log_id: UUID, entry: QueryAuditEntry) -> UUID:
         """Log RAG query-specific audit information"""
@@ -271,9 +256,8 @@ class AuditService:
 
         return query_id
 
-    # ----------------------------------------
     # AUTH AUDIT
-    # ----------------------------------------
+    # -----------
 
     async def log_auth(self, main_log_id: UUID, entry: AuthAuditEntry) -> UUID:
         """Log authentication event"""
@@ -306,9 +290,8 @@ class AuditService:
 
         return auth_id
 
-    # ----------------------------------------
     # MODIFICATION AUDIT
-    # ----------------------------------------
+    # -------------------
 
     async def log_modification(
         self, main_log_id: UUID, entry: ModificationAuditEntry
@@ -342,9 +325,8 @@ class AuditService:
 
         return mod_id
 
-    # ----------------------------------------
     # CONVENIENCE METHODS
-    # ----------------------------------------
+    # --------------------
 
     async def log_document_access(
         self,
@@ -437,9 +419,8 @@ class AuditService:
 
         return log_id
 
-    # ----------------------------------------
     # QUERY METHODS FOR COMPLIANCE REPORTS
-    # ----------------------------------------
+    # -------------------------------------
 
     async def get_user_activity(
         self, user_id: UUID, start_date: datetime, end_date: datetime
@@ -554,9 +535,8 @@ class AuditService:
         return len(result)
 
 
-# ============================================
-# HELPER FUNCTIONS
-# ============================================
+#       HELPER FUNCTIONS
+# ---------------------------------
 
 
 def extract_client_info(request: Request) -> Dict[str, Optional[str]]:

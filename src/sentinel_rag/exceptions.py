@@ -1,23 +1,13 @@
-"""
-Centralized Exception Definitions.
-
-All application exceptions inherit from SentinelError.
-"""
-
 from typing import Any, Dict, Optional
 
 
-# ============================================
-# BASE EXCEPTIONS
-# ============================================
+#       BASE EXCEPTIONS
+# ------------------------------
 
 
 class SentinelError(Exception):
     """
     Base exception for all Sentinel RAG errors.
-
-    All custom exceptions should inherit from this class.
-    Provides structured error information for handlers.
     """
 
     def __init__(
@@ -42,9 +32,8 @@ class SentinelError(Exception):
         }
 
 
-# ============================================
-# USER EXCEPTIONS
-# ============================================
+#       USER EXCEPTIONS
+# ------------------------------
 
 
 class UserNotFoundError(SentinelError):
@@ -83,9 +72,8 @@ class UserAuthorizationError(SentinelError):
         )
 
 
-# ============================================
-# DOCUMENT EXCEPTIONS
-# ============================================
+#       DOCUMENT EXCEPTIONS
+# ---------------------------------
 
 
 class DocumentNotFoundError(SentinelError):
@@ -124,9 +112,8 @@ class DocumentAccessDeniedError(SentinelError):
         )
 
 
-# ============================================
-# DEPARTMENT EXCEPTIONS
-# ============================================
+#       DEPARTMENT EXCEPTIONS
+# -----------------------------------
 
 
 class DepartmentNotFoundError(SentinelError):
@@ -141,9 +128,8 @@ class DepartmentNotFoundError(SentinelError):
         )
 
 
-# ============================================
-# QUERY EXCEPTIONS
-# ============================================
+#       QUERY EXCEPTIONS
+# ---------------------------------
 
 
 class QueryProcessingError(SentinelError):
@@ -170,9 +156,8 @@ class QueryValidationError(SentinelError):
         )
 
 
-# ============================================
-# DATABASE EXCEPTIONS
-# ============================================
+#       DATABASE EXCEPTIONS
+# ----------------------------------
 
 
 class DatabaseConnectionError(SentinelError):
@@ -199,9 +184,8 @@ class DatabaseQueryError(SentinelError):
         )
 
 
-# ============================================
-# CONFIGURATION EXCEPTIONS
-# ============================================
+#       CONFIGURATION EXCEPTIONS
+# -------------------------------------
 
 
 class ConfigurationError(SentinelError):
@@ -212,25 +196,5 @@ class ConfigurationError(SentinelError):
             message=message,
             code="CONFIGURATION_ERROR",
             status_code=500,
-            **kwargs,
-        )
-
-
-# ============================================
-# RATE LIMITING
-# ============================================
-
-
-class RateLimitExceededError(SentinelError):
-    """Raised when rate limit is exceeded."""
-
-    def __init__(
-        self, message: str = "Rate limit exceeded", retry_after: int = 60, **kwargs
-    ):
-        super().__init__(
-            message=message,
-            code="RATE_LIMIT_EXCEEDED",
-            status_code=429,
-            details={"retry_after": retry_after},
             **kwargs,
         )

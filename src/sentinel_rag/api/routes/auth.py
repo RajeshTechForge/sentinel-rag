@@ -12,7 +12,7 @@ from sentinel_rag.api.dependencies import (
     RequestContextDep,
     AuditServiceDep,
 )
-from sentinel_rag import (
+from sentinel_rag.services.auth import (
     TenantConfig,
     register_tenant_client,
     create_access_token,
@@ -20,7 +20,7 @@ from sentinel_rag import (
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from sentinel_rag import (
+from sentinel_rag.services.audit import (
     AuditLogEntry,
     AuthAuditEntry,
     EventCategory,

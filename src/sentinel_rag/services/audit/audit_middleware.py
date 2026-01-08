@@ -1,12 +1,7 @@
-"""
-FastAPI Middleware and Decorators for Automatic Audit Logging
-"""
-
 import time
 from functools import wraps
 from typing import Callable, Optional
 from uuid import UUID
-
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -20,9 +15,8 @@ from .audit_service import (
 )
 
 
-# ============================================
 #               MIDDLEWARE
-# ============================================
+# -----------------------------------------
 
 
 class AuditLoggingMiddleware(BaseHTTPMiddleware):
@@ -36,7 +30,6 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         self.audit_service = audit_service
 
     async def dispatch(self, request: Request, call_next):
-        # Skip health checks and static files
         if request.url.path in ["/health", "/metrics", "/favicon.ico"]:
             return await call_next(request)
 
@@ -84,7 +77,6 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-            # Fire and forget (don't block response)
             try:
                 await self.audit_service.log(entry)
             except Exception:
@@ -106,9 +98,8 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         return method_map.get(method, Action.EXECUTE)
 
 
-# ============================================
 #               DECORATORS
-# ============================================
+# -----------------------------------------
 
 
 def audit_data_access(resource_type: str, include_pii: bool = False):
@@ -218,10 +209,10 @@ def audit_modification(table_name: str, operation: str):
             user_email = getattr(request.state, "user_email", None)
             client_info = extract_client_info(request)
 
-            # Capture old values if UPDATE or DELETE
+            # Capture old values if UPDATE or DELETE    ---> Upcoming...
             old_values = None
             if operation in ["UPDATE", "DELETE"]:
-                # You'll need to fetch old values before modification
+                # Need to fetch old values before modification
                 # This is operation-specific
                 pass
 
@@ -345,9 +336,8 @@ def audit_authorization(func: Callable):
     return wrapper
 
 
-# ============================================
 #           CONTEXT MANAGERS
-# ============================================
+# -----------------------------------------
 
 
 class AuditContext:
@@ -415,7 +405,7 @@ class AuditContext:
         except Exception:
             pass
 
-        return False  # Don't suppress exceptions
+        return False
 
     def add_metadata(self, key: str, value: any):
         """Add metadata to the audit entry"""

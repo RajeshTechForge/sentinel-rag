@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from sentinel_rag.exceptions import SentinelError
-from sentinel_rag.config.settings import get_settings
+from sentinel_rag.config import get_settings
 
 logger = logging.getLogger(__name__)
 

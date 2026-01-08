@@ -1,30 +1,16 @@
-"""
-Dependency Injection Module.
-
-This is the heart of industrial-grade FastAPI architecture.
-All dependencies are defined here and injected into routes.
-
-Benefits:
-- Testability: Easy to mock/override dependencies
-- Loose coupling: Routes don't know about implementations
-- Lifecycle management: Proper setup/teardown
-- Thread safety: Managed by FastAPI's DI system
-"""
-
+import asyncpg
 from contextlib import asynccontextmanager
 from typing import Annotated, Optional, Protocol
-
-import asyncpg
 from fastapi import Depends, HTTPException, Request, status
 
-from sentinel_rag import DatabaseManager, SentinelEngine
-from sentinel_rag.config.settings import AppSettings, get_settings
-from sentinel_rag import AuditService
+from sentinel_rag.core import SentinelEngine
+from sentinel_rag.services.database import DatabaseManager
+from sentinel_rag.services.audit import AuditService
+from sentinel_rag.config import AppSettings, get_settings
 
 
-# ============================================
-# PROTOCOLS (INTERFACES)
-# ============================================
+#       PROTOCOLS (INTERFACES)
+# ------------------------------------
 
 
 class IAuditService(Protocol):
@@ -50,9 +36,8 @@ class MockAuditService:
         pass
 
 
-# ============================================
-# APPLICATION STATE
-# ============================================
+#       APPLICATION STATE
+# ------------------------------------
 
 
 class AppState:
@@ -123,9 +108,8 @@ def get_app_state() -> AppState:
     return _app_state
 
 
-# ============================================
-# LIFESPAN CONTEXT MANAGER
-# ============================================
+#       LIFESPAN CONTEXT MANAGER
+# -------------------------------------
 
 
 @asynccontextmanager
@@ -146,9 +130,8 @@ async def app_lifespan(app):
     print("🛑 Sentinel RAG API shutdown complete")
 
 
-# ============================================
-# DEPENDENCY PROVIDERS
-# ============================================
+#       DEPENDENCY PROVIDERS
+# ------------------------------------
 
 
 def get_settings_dep() -> AppSettings:
@@ -201,9 +184,8 @@ def get_audit_service(
 AuditServiceDep = Annotated[IAuditService, Depends(get_audit_service)]
 
 
-# ============================================
-# REQUEST CONTEXT
-# ============================================
+#       REQUEST CONTEXT
+# ------------------------------------
 
 
 class RequestContext:
@@ -259,9 +241,8 @@ async def get_request_context(request: Request) -> RequestContext:
 RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
 
 
-# ============================================
-# COMPOSITE DEPENDENCIES
-# ============================================
+#       COMPOSITE DEPENDENCIES
+# ------------------------------------
 
 
 class ServiceContainer:

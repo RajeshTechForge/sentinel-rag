@@ -1,21 +1,10 @@
-"""
-Request/Response Schemas Module.
-
-Separating schemas provides:
-- Single source of truth for data contracts
-- Easy versioning (v1/v2 schemas)
-- Reusability across endpoints
-- Clear API documentation
-"""
-
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
-# ============================================
-# BASE MODELS
-# ============================================
+#       BASE MODELS
+# -------------------------
 
 
 class BaseSchema(BaseModel):
@@ -33,29 +22,22 @@ class TimestampMixin(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-# ============================================
-# USER SCHEMAS
-# ============================================
+#           USER
+# ---------------------------
 
 
-class UserBase(BaseSchema):
-    """Base user schema with shared fields."""
-
-    user_email: EmailStr
-    full_name: str = Field(min_length=1, max_length=255)
-
-
-class UserResponse(UserBase):
+class UserResponse(BaseSchema):
     """Response model for user data."""
 
     user_id: str
+    user_email: EmailStr
     user_role: str
     user_department: str
 
 
-# ============================================
-# DOCUMENT SCHEMAS
-# ============================================
+#           DOCUMENT
+# ----------------------------
+
 
 class DocumentUploadResponse(BaseSchema):
     """Response after successful document upload."""
@@ -94,9 +76,8 @@ class DocumentListItem(BaseSchema, TimestampMixin):
     chunk_count: Optional[int] = None
 
 
-# ============================================
-# QUERY SCHEMAS
-# ============================================
+#           QUERY
+# ---------------------------
 
 
 class QueryRequest(BaseSchema):
@@ -131,9 +112,8 @@ class QueryAuditInfo(BaseSchema):
     pii_types_found: List[str] = Field(default_factory=list)
 
 
-# ============================================
-# HEALTH CHECK SCHEMAS
-# ============================================
+#           HEALTH CHECK
+# -----------------------------------
 
 
 class HealthResponse(BaseSchema):
@@ -152,9 +132,8 @@ class DetailedHealthResponse(HealthResponse):
     components: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
 
-# ============================================
-# ERROR SCHEMAS
-# ============================================
+#           ERROR
+# ---------------------------
 
 
 class ErrorDetail(BaseSchema):

@@ -1,28 +1,23 @@
-"""
-Query Routes.
-
-Handles RAG query endpoints with authentication and audit logging.
-"""
-
 import re
 from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Depends
 
-from sentinel_rag import get_current_active_user, UserContext
-from sentinel_rag.exceptions import DocumentProcessingError
-from sentinel_rag.api.dependencies import (
-    EngineDep,
-    AuditServiceDep,
-    RequestContextDep,
-)
-from sentinel_rag.schemas import QueryRequest, DocumentResponse
-from sentinel_rag import (
+from sentinel_rag.services.auth import get_current_active_user, UserContext
+from sentinel_rag.services.audit import (
     AuditLogEntry,
     QueryAuditEntry,
     EventCategory,
     EventOutcome,
     Action,
+)
+
+from sentinel_rag.api.schema import QueryRequest, DocumentResponse
+from sentinel_rag.exceptions import DocumentProcessingError
+from sentinel_rag.api.dependencies import (
+    EngineDep,
+    AuditServiceDep,
+    RequestContextDep,
 )
 
 
