@@ -43,7 +43,7 @@ def verify_token(token: str) -> UserContext:
             user_id=claims["user_id"],
             email=claims["sub"],
             tenant_id=claims["tenant_id"],
-            roles=claims["roles"],
+            roles=claims["role"],
             department=claims["department"],
         )
     except (JoseError, KeyError):
