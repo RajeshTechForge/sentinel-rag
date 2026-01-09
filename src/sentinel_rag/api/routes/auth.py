@@ -68,6 +68,10 @@ async def login(request: Request):
     """
     The login endpoint initiates the OIDC authentication flow by redirecting the user
     to the identity provider's authorization URL.
+
+    Query Parameters:
+        redirect_uri (optional): URL to redirect to after successful authentication.
+                                 The access token will be appended as a query parameter.
     """
     # Validate OIDC configuration before attempting login
     oidc_config = given_tenant_config.get("oidc_config", {})
@@ -96,21 +100,27 @@ async def login(request: Request):
             detail=f"Failed to initialize OIDC client: {str(e)}",
         )
 
-    redirect_uri = str(request.url_for("auth_callback"))
+    callback_uri = str(request.url_for("auth_callback"))
 
-    # Create secure state parameter
+    # Create secure state parameter with optional frontend redirect
     state_data = {
         "tenant_id": given_tenant_config["tenant_id"],
         "nonce": secrets.token_urlsafe(32),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
+    # Get frontend redirect URI if provided
+    frontend_redirect = request.query_params.get("redirect_uri")
+
+    if frontend_redirect:
+        state_data["frontend_redirect"] = frontend_redirect
+
     state_token = jwt.encode({"alg": ALGORITHM}, state_data, SECRET_KEY).decode("utf-8")
 
     try:
         return await client.authorize_redirect(
             request,
-            redirect_uri,
+            callback_uri,
             state=state_token,
         )
     except Exception as e:
@@ -232,7 +242,7 @@ async def auth_callback(
                 "sub": email,
                 "user_id": user_id,
                 "tenant_id": tenant_id,
-                "roles": role,
+                "role": role,
                 "department": department,
             },
             expires_delta=access_token_expires,
@@ -262,16 +272,24 @@ async def auth_callback(
         )
         await audit.log_auth(log_id, auth_entry)
 
-        # Set secure cookie and redirect
-        response = RedirectResponse(url="/")
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        )
+        # Check for frontend redirect in state (from login) or query params
+        frontend_redirect = state_data.get("frontend_redirect")
+
+        if frontend_redirect:
+            separator = "&" if "?" in frontend_redirect else "?"
+            response = RedirectResponse(
+                url=f"{frontend_redirect}{separator}access_token={access_token}"
+            )
+        else:
+            response = RedirectResponse(url="/")
+            response.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            )
 
         return response
 
@@ -398,7 +416,7 @@ async def complete_registration(
                 "sub": email,
                 "user_id": user_id,
                 "tenant_id": tenant_id,
-                "roles": registration_request.role,
+                "role": registration_request.role,
                 "department": registration_request.department,
             },
             expires_delta=access_token_expires,
