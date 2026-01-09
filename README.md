@@ -8,11 +8,12 @@
 
 *The "Security-First" RAG Framework for Modern Enterprises*
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://pydantic.dev)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)
-[![View My Profile](https://img.shields.io/badge/View-My_Profile-blue?logo=GitHub)](https://github.com/rajeshtechforge)
+![Python](https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue)
+![FastAPI](https://img.shields.io/badge/fastapi-109989?style=for-the-badge&logo=FASTAPI&logoColor=white)
+![Pydantic v2](https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=Pydantic&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)
+
 
 <p align="center">
   <a href="https://github.com/RajeshTechForge/sentinel-rag/stargazers">
@@ -94,28 +95,21 @@ Sentinel RAG offers two setup options: **Docker** (recommended for quick setup) 
 
 The fastest way to get Sentinel RAG running with all dependencies pre-configured.
 
-#### 1. Clone & Launch
+#### 1. Clone, Config & Launch
 
 ```bash
 # Clone the repository
 git clone https://github.com/RajeshTechForge/sentinel-rag.git
 cd sentinel-rag
 
+# Create a `.env` file based on example
+cp .env.example .env
+
 # Build and start all services
 docker compose up --build
 ```
 
-This command will:
-- Start a **PostgreSQL** database with the `pgvector` extension on port `5433` (mapped to avoid local conflicts)
-- Build and launch the **Sentinel RAG API** on port `8000`
-
-#### 2. Verify Installation
-
-```bash
-# Health check
-curl http://localhost:8000/health
-```
-
+> This start sentinel-rag api on port `8000`
 
 ### Local Setup
 
@@ -142,26 +136,22 @@ Create a `.env` file based on the example:
 cp .env.example .env
 ```
 
-> [!NOTE]
-> Please check out [CONFIGURATION.md](docs/CONFIGURATION.md) for comprehensive guidelines on architecting a custom `config.json` tailored for your organization’s structure.
-
 #### 3. Launch the API
 
 ```bash
 uv run uvicorn sentinel_rag.api.app:app --reload
 
-# if you want to test it without api, using your cli
-uv run -m test.cli
-
 ```
-> **Full API documentation:** [OpenAPI Spec](http://localhost:8000/docs) (available when running)
+
+> [!IMPORTANT]
+> Using Python 3.14 may cause compatibility issues due to using Pydantic v2. It is recommended to use Python 3.10 - 3.13.
 
 
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
 | --- | --- |
-| **Language** | Python 3.10+ |
+| **Language** | Python 3.10 - 3.13 |
 | **API Framework** | FastAPI (Async) |
 | **Data Validation** | Pydantic v2 |
 | **Package Manager** | uv |
