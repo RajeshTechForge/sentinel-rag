@@ -28,18 +28,18 @@ from tests.test_utils import MockUserContext, create_mock_get_current_user
 def setup_test_environment():
     """
     Set up test environment variables.
-    
+
     This runs once per test session before any tests execute.
     """
     # Ensure we're using test configuration
     os.environ.setdefault("TESTING", "true")
-    
+
     # Disable audit logging in tests to avoid database overhead
     # Unless explicitly testing audit functionality
     os.environ.setdefault("AUDIT_ENABLED", "false")
-    
+
     yield
-    
+
     # Cleanup after all tests
     pass
 
@@ -53,17 +53,17 @@ def setup_test_environment():
 def app():
     """
     Create a fresh FastAPI application instance for each test.
-    
+
     This ensures test isolation by creating a new app instance
     for each test function.
-    
+
     Returns:
         FastAPI application instance
     """
     application = create_application()
-    
+
     yield application
-    
+
     # Clear dependency overrides after each test
     application.dependency_overrides.clear()
 
@@ -72,16 +72,16 @@ def app():
 def client(app) -> Generator[TestClient, None, None]:
     """
     Create a TestClient without authentication.
-    
+
     Use this for testing public endpoints or when you want to
     manually handle authentication in the test.
-    
+
     Args:
         app: FastAPI application instance
-        
+
     Returns:
         TestClient instance
-        
+
     Example:
         ```python
         def test_health_check(client):
@@ -102,15 +102,15 @@ def client(app) -> Generator[TestClient, None, None]:
 def admin_client(app) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as an Admin user.
-    
+
     This client bypasses OIDC authentication and uses a mock admin user.
-    
+
     Args:
         app: FastAPI application instance
-        
+
     Returns:
         TestClient authenticated as admin
-        
+
     Example:
         ```python
         def test_admin_access(admin_client):
@@ -123,10 +123,10 @@ def admin_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_admin
     )
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     # Cleanup
     app.dependency_overrides.clear()
 
@@ -135,12 +135,12 @@ def admin_client(app) -> Generator[TestClient, None, None]:
 def user_client(app) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as a regular User.
-    
+
     This client uses a mock user from the Engineering department.
-    
+
     Args:
         app: FastAPI application instance
-        
+
     Returns:
         TestClient authenticated as regular user
     """
@@ -148,10 +148,10 @@ def user_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_user
     )
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
 
 
@@ -159,10 +159,10 @@ def user_client(app) -> Generator[TestClient, None, None]:
 def hr_client(app) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as an HR department user.
-    
+
     Args:
         app: FastAPI application instance
-        
+
     Returns:
         TestClient authenticated as HR user
     """
@@ -170,10 +170,10 @@ def hr_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_hr
     )
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
 
 
@@ -181,10 +181,10 @@ def hr_client(app) -> Generator[TestClient, None, None]:
 def finance_client(app) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as a Finance department user.
-    
+
     Args:
         app: FastAPI application instance
-        
+
     Returns:
         TestClient authenticated as Finance user
     """
@@ -192,27 +192,27 @@ def finance_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_finance
     )
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
 
 
 def create_custom_client(app, user_context):
     """
     Helper to create a client with a custom user context.
-    
+
     This is useful when you need a specific user configuration
     that isn't covered by the predefined fixtures.
-    
+
     Args:
         app: FastAPI application instance
         user_context: UserContext to use for authentication
-        
+
     Returns:
         TestClient authenticated with the provided user context
-        
+
     Example:
         ```python
         def test_custom_user(app):
@@ -272,13 +272,13 @@ def mock_finance():
 def app_state(app):
     """
     Get the application state for testing.
-    
+
     This provides access to the database, engine, and audit service.
     Note: The app must be used within a lifespan context for this to work.
-    
+
     Args:
         app: FastAPI application instance
-        
+
     Returns:
         AppState instance
     """

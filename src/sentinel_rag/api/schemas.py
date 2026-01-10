@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
@@ -29,7 +30,7 @@ class TimestampMixin(BaseModel):
 class UserResponse(BaseSchema):
     """Response model for user data."""
 
-    user_id: str
+    user_id: UUID
     user_email: EmailStr
     user_role: str
     user_department: str
@@ -42,7 +43,7 @@ class UserResponse(BaseSchema):
 class DocumentUploadResponse(BaseSchema):
     """Response after successful document upload."""
 
-    doc_id: str
+    doc_id: UUID
     doc_classification: str
     doc_department: str
     uploaded_by: EmailStr
@@ -52,8 +53,8 @@ class DocumentUploadResponse(BaseSchema):
 class DocumentMetadata(BaseSchema):
     """Document metadata from vector store."""
 
-    doc_id: Optional[str] = None
-    chunk_id: Optional[str] = None
+    doc_id: Optional[UUID] = None
+    chunk_id: Optional[UUID] = None
     title: Optional[str] = None
     classification: Optional[str] = None
     department: Optional[str] = None
@@ -69,7 +70,7 @@ class DocumentResponse(BaseSchema):
 class DocumentListItem(BaseSchema, TimestampMixin):
     """Document item in list response."""
 
-    doc_id: str
+    doc_id: UUID
     title: str
     classification: str
     department: str

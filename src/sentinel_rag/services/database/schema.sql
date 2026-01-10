@@ -57,18 +57,20 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     metadata JSONB
 );
 
--- Indexes
+-- INDEXES FOR PERFORMANCE
+-- -----------------------
+
 CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_roles_department_id ON roles(department_id);
 
--- Performance Indexes
--- 1. HNSW Index for fast vector similarity search (cosine distance)
+-- HNSW Index for fast vector similarity search (cosine distance)
 CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks USING hnsw (embedding vector_cosine_ops);
 
--- 2. GIN Index for fast metadata filtering
+-- GIN Index for fast metadata filtering
 CREATE INDEX IF NOT EXISTS idx_documents_metadata ON documents USING GIN (metadata);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_metadata ON document_chunks USING GIN (metadata);
+
 
 
 -- ============================================
@@ -196,9 +198,8 @@ CREATE TABLE IF NOT EXISTS modification_audit (
     metadata JSONB
 );
 
--- ============================================
 -- INDEXES FOR PERFORMANCE
--- ============================================
+-- -----------------------
 
 -- Time-based queries (most common for compliance reports)
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);

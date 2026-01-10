@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from uuid import UUID
+from pydantic import BaseModel, EmailStr
 
 
 class OIDCConfig(BaseModel):
@@ -14,8 +15,8 @@ class TenantConfig(BaseModel):
 
 
 class UserContext(BaseModel):
-    user_id: str
-    email: str
+    user_id: UUID
+    email: EmailStr
     tenant_id: str
     role: str
     department: str

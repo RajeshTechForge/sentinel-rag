@@ -12,7 +12,7 @@ from sentinel_rag.services.audit import (
     Action,
 )
 
-from sentinel_rag.api.schema import QueryRequest, DocumentResponse
+from sentinel_rag.api.schemas import QueryRequest, DocumentResponse
 from sentinel_rag.exceptions import DocumentProcessingError
 from sentinel_rag.api.dependencies import (
     EngineDep,

@@ -11,7 +11,7 @@ from sentinel_rag.services.audit import (
 )
 
 from sentinel_rag.exceptions import DocumentProcessingError
-from sentinel_rag.api.schema import DocumentUploadResponse
+from sentinel_rag.api.schemas import DocumentUploadResponse
 from sentinel_rag.api.dependencies import (
     EngineDep,
     AuditServiceDep,

@@ -6,7 +6,8 @@ bypasses OIDC authentication using dependency_overrides.
 """
 
 import pytest
-from tests.test_utils import MockUserContext
+from uuid import UUID
+from tests.test_utils import MockUserContext, TestUsers
 
 
 @pytest.mark.auth
@@ -16,7 +17,7 @@ class TestMockAuthentication:
 
     def test_admin_user_context_creation(self, mock_admin):
         """Test that mock admin user context is created correctly."""
-        assert mock_admin.user_id == "test-admin-001"
+        assert mock_admin.user_id == TestUsers.ADMIN_USER_ID
         assert mock_admin.email == "admin@test.com"
         assert mock_admin.role == "Admin"
         assert mock_admin.department == "IT"
@@ -24,7 +25,7 @@ class TestMockAuthentication:
 
     def test_regular_user_context_creation(self, mock_user):
         """Test that mock regular user context is created correctly."""
-        assert mock_user.user_id == "test-user-001"
+        assert mock_user.user_id == TestUsers.REGULAR_USER_ID
         assert mock_user.email == "user@test.com"
         assert mock_user.role == "User"
         assert mock_user.department == "Engineering"
@@ -42,14 +43,14 @@ class TestMockAuthentication:
     def test_custom_user_context_creation(self):
         """Test creating a custom user context with specific parameters."""
         custom_user = MockUserContext.create_custom(
-            user_id="custom-123",
+            user_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
             email="custom@example.com",
             tenant_id="tenant-999",
             role="CustomRole",
             department="CustomDept",
         )
 
-        assert custom_user.user_id == "custom-123"
+        assert custom_user.user_id == UUID("123e4567-e89b-12d3-a456-426614174000")
         assert custom_user.email == "custom@example.com"
         assert custom_user.tenant_id == "tenant-999"
         assert custom_user.role == "CustomRole"
@@ -59,7 +60,7 @@ class TestMockAuthentication:
         """Test that UserContext enforces Pydantic validation."""
         # This should succeed - all required fields provided
         valid_user = MockUserContext.create_custom(
-            user_id="test-001",
+            user_id="123e4567-e89b-12d3-a456-426614174001",
             email="test@example.com",
             tenant_id="tenant-001",
             role="TestRole",
@@ -73,13 +74,13 @@ class TestMockAuthentication:
 
         # Valid creation
         user = UserContext(
-            user_id="valid-id",
+            user_id=UUID("123e4567-e89b-12d3-a456-426614174002"),
             email="valid@test.com",
             tenant_id="tenant-1",
             role="Role",
             department="Dept",
         )
-        assert user.user_id == "valid-id"
+        assert user.user_id == UUID("123e4567-e89b-12d3-a456-426614174002")
 
 
 @pytest.mark.auth
@@ -97,7 +98,7 @@ class TestAuthenticationBypass:
         data = response.json()
 
         # Verify we get the mock admin user data
-        assert data["user_id"] == "test-admin-001"
+        assert data["user_id"] == str(TestUsers.ADMIN_USER_ID)
         assert data["user_email"] == "admin@test.com"
         assert data["user_role"] == "Admin"
         assert data["user_department"] == "IT"
@@ -109,7 +110,7 @@ class TestAuthenticationBypass:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["user_id"] == "test-user-001"
+        assert data["user_id"] == str(TestUsers.REGULAR_USER_ID)
         assert data["user_email"] == "user@test.com"
         assert data["user_role"] == "User"
         assert data["user_department"] == "Engineering"
@@ -149,7 +150,7 @@ class TestAuthenticationBypass:
 
         # Create client with first user
         user1 = MockUserContext.create_custom(
-            user_id="user-1",
+            user_id=UUID("123e4567-e89b-12d3-a456-426614174001"),
             email="user1@test.com",
             tenant_id="tenant-1",
             role="Role1",
@@ -159,13 +160,13 @@ class TestAuthenticationBypass:
 
         response1 = client1.post("/api/user")
         assert response1.status_code == 200
-        assert response1.json()["user_id"] == "user-1"
+        assert response1.json()["user_id"] == "123e4567-e89b-12d3-a456-426614174001"
 
         # Clear and create client with second user
         app.dependency_overrides.clear()
 
         user2 = MockUserContext.create_custom(
-            user_id="user-2",
+            user_id=UUID("123e4567-e89b-12d3-a456-426614174002"),
             email="user2@test.com",
             tenant_id="tenant-1",
             role="Role2",
@@ -175,4 +176,4 @@ class TestAuthenticationBypass:
 
         response2 = client2.post("/api/user")
         assert response2.status_code == 200
-        assert response2.json()["user_id"] == "user-2"
+        assert response2.json()["user_id"] == "123e4567-e89b-12d3-a456-426614174002"

@@ -5,13 +5,12 @@ from uuid import UUID
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .audit_service import (
-    Action,
+from .audit_service import AuditService, extract_client_info
+from .schemas import (
     AuditLogEntry,
-    AuditService,
     EventCategory,
     EventOutcome,
-    extract_client_info,
+    Action,
 )
 
 

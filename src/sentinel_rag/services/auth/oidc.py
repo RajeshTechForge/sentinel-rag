@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from authlib.integrations.starlette_client import OAuth
 from authlib.jose import jwt, JoseError
 
-from .models import TenantConfig, UserContext
+from .schemas import TenantConfig, UserContext
 
 
 # --- Configuration ---

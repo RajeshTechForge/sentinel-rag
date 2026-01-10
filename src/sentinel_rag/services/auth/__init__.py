@@ -1,4 +1,4 @@
-from .models import TenantConfig, UserContext
+from .schemas import TenantConfig, UserContext
 from .oidc import (
     get_current_active_user,
     register_tenant_client,

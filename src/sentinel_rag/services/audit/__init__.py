@@ -1,6 +1,6 @@
 from .audit_middleware import AuditLoggingMiddleware
-from .audit_service import (
-    AuditService,
+from .audit_service import AuditService, extract_client_info
+from .schemas import (
     AuditLogEntry,
     QueryAuditEntry,
     AuthAuditEntry,
@@ -8,7 +8,6 @@ from .audit_service import (
     EventOutcome,
     Action,
     ResourceType,
-    extract_client_info,
 )
 
 __all__ = [

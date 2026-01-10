@@ -25,7 +25,7 @@ def create_application() -> FastAPI:
 
     # Configure logging
     log_level = logging.DEBUG if settings.debug else logging.WARNING
-    logging.basicConfig(level=log_level, force=True)
+    logging.basicConfig(level=log_level)
     logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
 
     # Create FastAPI app

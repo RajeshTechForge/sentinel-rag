@@ -7,6 +7,7 @@ tenant isolation, and department-based access control.
 
 import io
 import pytest
+from uuid import UUID
 
 
 @pytest.mark.documents
@@ -30,7 +31,9 @@ class TestDocumentUploadEndpoints:
         # 200 = success, 401 = auth (shouldn't happen), 500 = engine issue
         assert response.status_code in [200, 500]
 
-    def test_upload_document_with_regular_user(self, user_client, sample_document_upload):
+    def test_upload_document_with_regular_user(
+        self, user_client, sample_document_upload
+    ):
         """Test that regular user can upload documents."""
         file_content = b"Regular user document content."
         file = ("file", ("user_doc.txt", io.BytesIO(file_content), "text/plain"))
@@ -43,7 +46,9 @@ class TestDocumentUploadEndpoints:
 
         assert response.status_code in [200, 500]
 
-    def test_upload_document_without_authentication(self, client, sample_document_upload):
+    def test_upload_document_without_authentication(
+        self, client, sample_document_upload
+    ):
         """Test that unauthenticated uploads are rejected."""
         file_content = b"Test content"
         file = ("file", ("test.txt", io.BytesIO(file_content), "text/plain"))
@@ -84,7 +89,9 @@ class TestDocumentUploadEndpoints:
         # Should fail validation
         assert response.status_code == 422
 
-    def test_upload_document_response_structure(self, admin_client, sample_document_upload):
+    def test_upload_document_response_structure(
+        self, admin_client, sample_document_upload
+    ):
         """Test the structure of a successful upload response."""
         file_content = b"Test document for response validation."
         file = ("file", ("test.txt", io.BytesIO(file_content), "text/plain"))
@@ -152,7 +159,10 @@ class TestDocumentUploadEndpoints:
                 "doc_classification": classification,
             }
 
-            file = ("file", (f"{classification}.txt", io.BytesIO(file_content), "text/plain"))
+            file = (
+                "file",
+                (f"{classification}.txt", io.BytesIO(file_content), "text/plain"),
+            )
 
             response = admin_client.post(
                 "/api/documents/upload",
@@ -175,7 +185,10 @@ class TestDocumentUploadEndpoints:
                 "doc_classification": "Internal",
             }
 
-            file = ("file", (f"{department}.txt", io.BytesIO(file_content), "text/plain"))
+            file = (
+                "file",
+                (f"{department}.txt", io.BytesIO(file_content), "text/plain"),
+            )
 
             response = admin_client.post(
                 "/api/documents/upload",
@@ -298,17 +311,18 @@ class TestDocumentUploadModels:
 
     def test_document_upload_response_creation(self):
         """Test creating a DocumentUploadResponse."""
-        from sentinel_rag.api.schema import DocumentUploadResponse
+        from sentinel_rag.api.schemas import DocumentUploadResponse
 
+        test_uuid = UUID("123e4567-e89b-12d3-a456-426614174000")
         response = DocumentUploadResponse(
-            doc_id="test-doc-001",
+            doc_id=test_uuid,
             doc_classification="Internal",
             doc_department="Engineering",
             uploaded_by="test@example.com",
             processing_time_ms=123.45,
         )
 
-        assert response.doc_id == "test-doc-001"
+        assert response.doc_id == test_uuid
         assert response.doc_classification == "Internal"
         assert response.doc_department == "Engineering"
         assert response.uploaded_by == "test@example.com"

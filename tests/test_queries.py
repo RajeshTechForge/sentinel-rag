@@ -54,9 +54,7 @@ class TestQueryEndpoints:
         assert response.status_code == 422
 
         # Test with invalid k value (negative)
-        response = admin_client.post(
-            "/api/query", json={"user_query": "test", "k": -1}
-        )
+        response = admin_client.post("/api/query", json={"user_query": "test", "k": -1})
         assert response.status_code == 422
 
     def test_query_with_valid_parameters(self, admin_client):
@@ -125,16 +123,16 @@ class TestQueryEndpoints:
         # Create a query longer than max_length (5000)
         long_query = "a" * 5001
 
-        response = admin_client.post("/api/query", json={"user_query": long_query, "k": 5})
+        response = admin_client.post(
+            "/api/query", json={"user_query": long_query, "k": 5}
+        )
 
         # Should fail validation
         assert response.status_code == 422
 
     def test_query_default_k_value(self, admin_client):
         """Test that k defaults to 5 when not provided."""
-        response = admin_client.post(
-            "/api/query", json={"user_query": "test query"}
-        )
+        response = admin_client.post("/api/query", json={"user_query": "test query"})
 
         # Should use default k=5 and succeed
         assert response.status_code in [200, 500]
@@ -142,27 +140,19 @@ class TestQueryEndpoints:
     def test_query_boundary_k_values(self, admin_client):
         """Test k parameter boundary values."""
         # Minimum valid k (1)
-        response = admin_client.post(
-            "/api/query", json={"user_query": "test", "k": 1}
-        )
+        response = admin_client.post("/api/query", json={"user_query": "test", "k": 1})
         assert response.status_code in [200, 500]
 
         # Maximum valid k (50)
-        response = admin_client.post(
-            "/api/query", json={"user_query": "test", "k": 50}
-        )
+        response = admin_client.post("/api/query", json={"user_query": "test", "k": 50})
         assert response.status_code in [200, 500]
 
         # Just over maximum k (51)
-        response = admin_client.post(
-            "/api/query", json={"user_query": "test", "k": 51}
-        )
+        response = admin_client.post("/api/query", json={"user_query": "test", "k": 51})
         assert response.status_code == 422
 
         # Just under minimum k (0)
-        response = admin_client.post(
-            "/api/query", json={"user_query": "test", "k": 0}
-        )
+        response = admin_client.post("/api/query", json={"user_query": "test", "k": 0})
         assert response.status_code == 422
 
 
@@ -173,7 +163,7 @@ class TestQueryRequestModel:
 
     def test_query_request_creation(self):
         """Test creating a valid QueryRequest."""
-        from sentinel_rag.api.schema import QueryRequest
+        from sentinel_rag.api.schemas import QueryRequest
 
         query = QueryRequest(user_query="What is the policy?", k=5)
 
@@ -182,7 +172,7 @@ class TestQueryRequestModel:
 
     def test_query_request_defaults(self):
         """Test QueryRequest default values."""
-        from sentinel_rag.api.schema import QueryRequest
+        from sentinel_rag.api.schemas import QueryRequest
 
         query = QueryRequest(user_query="test query")
 
@@ -190,7 +180,7 @@ class TestQueryRequestModel:
 
     def test_query_request_sanitization(self):
         """Test that QueryRequest sanitizes input."""
-        from sentinel_rag.api.schema import QueryRequest
+        from sentinel_rag.api.schemas import QueryRequest
 
         # Query with whitespace should be stripped
         query = QueryRequest(user_query="  test query  ", k=3)

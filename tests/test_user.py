@@ -6,6 +6,8 @@ information and work properly with mock authentication.
 """
 
 import pytest
+from uuid import UUID
+from tests.test_utils import TestUsers
 
 
 @pytest.mark.user
@@ -20,7 +22,7 @@ class TestUserEndpoints:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["user_id"] == "test-admin-001"
+        assert data["user_id"] == str(TestUsers.ADMIN_USER_ID)
         assert data["user_email"] == "admin@test.com"
         assert data["user_role"] == "Admin"
         assert data["user_department"] == "IT"
@@ -32,7 +34,7 @@ class TestUserEndpoints:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["user_id"] == "test-user-001"
+        assert data["user_id"] == str(TestUsers.REGULAR_USER_ID)
         assert data["user_email"] == "user@test.com"
         assert data["user_role"] == "User"
         assert data["user_department"] == "Engineering"
@@ -84,15 +86,13 @@ class TestUserEndpoints:
         # Verify email format (basic check)
         assert "@" in data["user_email"]
 
-    # def test_get_user_documents_endpoint_exists(self, admin_client):
-    #     """Test that the user documents endpoint is accessible."""
-    #     # This endpoint should exist and be protected by auth
-    #     response = admin_client.post("/api/user/docs")
-
-    #     # Should not be 404 or 401 (endpoint exists and we're authenticated)
-    #     # May be 200 with empty list, or other status depending on database state
-    #     assert response.status_code != 404
-    #     assert response.status_code != 401
+    def test_get_user_documents_endpoint_exists(self, admin_client):
+        """Test that the user documents endpoint is accessible."""
+        # This endpoint should exist and be protected by auth
+        response = admin_client.post("/api/user/docs")
+        # May be 200 with empty list, or other status depending on database state
+        assert response.status_code != 404
+        assert response.status_code != 401
 
     def test_different_users_have_different_profiles(self, app):
         """Test that different mock users return different profile data."""
@@ -101,7 +101,7 @@ class TestUserEndpoints:
 
         # Create two different users
         user1 = MockUserContext.create_custom(
-            user_id="unique-user-1",
+            user_id=UUID("11111111-0000-0000-0000-000000001101"),
             email="unique1@test.com",
             tenant_id="tenant-1",
             role="Engineer",
@@ -109,7 +109,7 @@ class TestUserEndpoints:
         )
 
         user2 = MockUserContext.create_custom(
-            user_id="unique-user-2",
+            user_id=UUID("11111111-0000-0000-0000-000000001102"),
             email="unique2@test.com",
             tenant_id="tenant-1",
             role="Manager",
@@ -144,7 +144,7 @@ class TestUserEndpoints:
         data = response.json()
 
         # Response should match the mock user context
-        assert data["user_id"] == mock_admin.user_id
+        assert data["user_id"] == str(mock_admin.user_id)
         assert data["user_email"] == mock_admin.email
         assert data["user_role"] == mock_admin.role
         assert data["user_department"] == mock_admin.department

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 
 from sentinel_rag.api.dependencies import SettingsDep, get_app_state
-from sentinel_rag.api.schema import HealthResponse, DetailedHealthResponse
+from sentinel_rag.api.schemas import HealthResponse, DetailedHealthResponse
 
 
 router = APIRouter(tags=["Health"])

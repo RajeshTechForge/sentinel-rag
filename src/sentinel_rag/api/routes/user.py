@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends
 
 from sentinel_rag.services.auth import get_current_active_user, UserContext
-from sentinel_rag.api.schema import UserResponse
+from sentinel_rag.api.schemas import UserResponse
 from sentinel_rag.api.dependencies import DatabaseDep
 
 
@@ -35,5 +35,5 @@ async def get_user_documents(
     Returns a list of document metadata for documents
     the specified user has uploaded.
     """
-    documents = db.get_document_uploads_by_user(user_id=user.user_id)
+    documents = db.get_document_uploads_by_user(user_id=str(user.user_id))
     return documents

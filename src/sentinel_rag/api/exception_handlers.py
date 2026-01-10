@@ -47,7 +47,7 @@ async def sentinel_exception_handler(
         extra={
             "request_id": request_id,
             "error_code": exc.code,
-            "message": exc.message,
+            "error_message": exc.message,  # Renamed from 'message' to avoid LogRecord conflict
             "path": request.url.path,
         },
     )
