@@ -1,29 +1,18 @@
 import os
 import tempfile
 import shutil
-from importlib import resources
 from langchain_community.embeddings import FakeEmbeddings
 
 from .seeder import seed_initial_data
 from .rbac_manager import RbacManager
 from .pii_manager import PiiManager
 from .document_processor import DocumentProcessor
-from .exceptions import EngineError, DocumentIngestionError, QueryError
+from .exceptions import DocumentIngestionError, QueryError
 
 
 class SentinelEngine:
     def __init__(self, db=None, config_file: str | None = None):
-        if config_file:
-            self.config_file = config_file
-        else:
-            try:
-                self.config_file = str(
-                    resources.files("sentinel_rag.config").joinpath("default.json")
-                )
-                print("Warning: No config file provided. Using default config.")
-            except Exception as e:
-                raise EngineError(f"Failed to load default config file: {e}")
-
+        self.config_file = config_file
         self.db = db
         seed_initial_data(db=self.db, config_file=self.config_file)
         self.rbac = RbacManager(self.config_file)

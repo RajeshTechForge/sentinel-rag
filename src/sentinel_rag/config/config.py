@@ -2,6 +2,7 @@
 Centralized Configuration Management using Pydantic Settings.
 """
 
+from os import path as os_path
 from functools import lru_cache
 from typing import Optional
 
@@ -101,6 +102,16 @@ class AppSettings(BaseSettings):
 
     # Config file path
     config_path: Optional[str] = Field(default=None, alias="SENTINEL_CONFIG_PATH")
+
+    @field_validator("config_path", mode="before")
+    @classmethod
+    def validate_config_path(cls, v: Optional[str]) -> str:
+        """Returns backup path if provided path is blank or does not exist."""
+        if not v or not os_path.exists(str(v)):
+            default_path = os_path.join(os_path.dirname(__file__), "default.json")
+            print("WARNING: No valid config file provided in `.env`. Using default config.")
+            return default_path
+        return str(v)
 
     # Nested settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
