@@ -334,90 +334,76 @@ def handle_chat(rag: SentinelEngine, db: DatabaseManager) -> None:
     """Handle chat session with enhanced interaction."""
     print_header("💬 Chat Interface")
 
-    try:
-        # Authenticate user
-        email = print_prompt("Email to login:")
-        if not email:
-            print_error("Email is required")
-            return
+    # Authenticate user
+    email = print_prompt("Email to login:")
+    if not email:
+        print_error("Email is required")
+        return
 
-        user = db.get_user_by_email(email)
-        if not user:
-            print_error("User not found", f"No user exists with email: {email}")
-            print_info("Tip: Use option 3 to create a new user")
-            return
+    user = db.get_user_by_email(email)
 
-        user_id = str(user["user_id"])
-        user_name = user.get("full_name", email)
+    if not user:
+        print_error("User not found", f"No user exists with email: {email}")
+        print_info("Tip: Use option 3 to create a new user")
+        return
+    user_id = str(user["user_id"])
+    user_name = user.get("full_name", email)
 
-        print_success(f"Logged in as: {user_name}")
-        print_info(f"Type '{EXIT_COMMAND}' to return to main menu")
-        print_divider()
+    print_success(f"Logged in as: {user_name}")
+    print_info(f"Type '{EXIT_COMMAND}' to return to main menu")
+    print_divider()
 
-        # Chat loop
-        while True:
-            query = input(
-                f"\n{Colors.BOLD}{Colors.BRIGHT_GREEN}You:{Colors.RESET} "
-            ).strip()
+    # Chat loop
+    while True:
+        query = input(
+            f"\n{Colors.BOLD}{Colors.BRIGHT_GREEN}You:{Colors.RESET} "
+        ).strip()
 
-            if not query:
-                continue
+        if not query:
+            continue
 
-            if query.lower() == EXIT_COMMAND:
-                print_info("Ending chat session...")
-                break
+        if query.lower() == EXIT_COMMAND:
+            print_info("Ending chat session...")
+            break
 
-            try:
-                # Query the RAG system
-                results = rag.query(query, user_id=user_id)
+        # Query the RAG system
+        results = rag.query(query, user_id=user_id)
 
-                # Display results
-                print(f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}Sentinel:{Colors.RESET}")
+        # Display results
+        print(f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}Sentinel:{Colors.RESET}")
 
-                if not results:
-                    print(
-                        f"{Colors.YELLOW}  No relevant documents found or access denied.{Colors.RESET}"
-                    )
-                    print_info("This could mean:")
-                    print(f"{Colors.DIM}    • No documents match your query")
-                    print(
-                        f"    • You don't have permission to access matching documents{Colors.RESET}"
-                    )
+        if not results:
+            print(
+                f"{Colors.YELLOW}  No relevant documents found or access denied.{Colors.RESET}"
+            )
+            print_info("This could mean:")
+            print(f"{Colors.DIM}    • No documents match your query")
+            print(
+                f"    • You don't have permission to access matching documents{Colors.RESET}"
+            )
+        else:
+            print(
+                f"{Colors.GREEN}  Found {len(results)} relevant document(s):{Colors.RESET}\n"
+            )
+
+            for i, doc in enumerate(results, 1):
+                score = doc.metadata.get("score", 0)
+                source = doc.metadata.get("source", "Unknown")
+                content_preview = doc.page_content[:200].replace("\n", " ")
+
+                # Score-based coloring
+                if score >= 0.8:
+                    score_color = Colors.BRIGHT_GREEN
+                elif score >= 0.6:
+                    score_color = Colors.BRIGHT_YELLOW
                 else:
-                    print(
-                        f"{Colors.GREEN}  Found {len(results)} relevant document(s):{Colors.RESET}\n"
-                    )
+                    score_color = Colors.BRIGHT_RED
 
-                    for i, doc in enumerate(results, 1):
-                        score = doc.metadata.get("score", 0)
-                        source = doc.metadata.get("source", "Unknown")
-                        content_preview = doc.page_content[:200].replace("\n", " ")
-
-                        # Score-based coloring
-                        if score >= 0.8:
-                            score_color = Colors.BRIGHT_GREEN
-                        elif score >= 0.6:
-                            score_color = Colors.BRIGHT_YELLOW
-                        else:
-                            score_color = Colors.BRIGHT_RED
-
-                        print(
-                            f"{Colors.BOLD}  [{i}]{Colors.RESET} {Colors.CYAN}{source}{Colors.RESET}"
-                        )
-                        print(f"      {score_color}Score: {score:.4f}{Colors.RESET}")
-                        print(f"      {Colors.DIM}{content_preview}...{Colors.RESET}\n")
-
-            except PermissionError as e:
-                print_error("Access denied", str(e))
-            except Exception as e:
-                print_error("Query failed", str(e))
                 print(
-                    f"{Colors.DIM}Tip: Check if the RAG system is properly initialized{Colors.RESET}"
+                    f"{Colors.BOLD}  [{i}]{Colors.RESET} {Colors.CYAN}{source}{Colors.RESET}"
                 )
-
-    except Exception as e:
-        print_error("Chat session failed", str(e))
-        print(f"\n{Colors.DIM}Stack trace available in logs{Colors.RESET}")
+                print(f"      {score_color}Score: {score:.4f}{Colors.RESET}")
+                print(f"      {Colors.DIM}{content_preview}...{Colors.RESET}\n")
 
 
 # ---------------------------
@@ -453,33 +439,22 @@ def main() -> NoReturn:
 
     # Main loop
     while True:
-        try:
-            display_menu()
-            choice = print_prompt("Select an option [1-4]:")
+        display_menu()
+        choice = print_prompt("Select an option [1-4]:")
 
-            if choice == OPTION_INGEST:
-                handle_ingest(engine, db)
-            elif choice == OPTION_CHAT:
-                handle_chat(engine, db)
-            elif choice == OPTION_CREATE_USER:
-                handle_create_user(db)
-            elif choice == OPTION_EXIT:
-                print(
-                    f"\n{Colors.BRIGHT_CYAN}Thanks for using Sentinel RAG! 👋{Colors.RESET}\n"
-                )
-                sys.exit(0)
-            else:
-                print_warning(f"Invalid choice: '{choice}'. Please enter 1-4.")
-
-        except KeyboardInterrupt:
-            print(f"\n\n{Colors.YELLOW}Interrupted by user{Colors.RESET}")
-            confirm = print_prompt("Are you sure you want to exit? (y/n):")
-            if confirm.lower() in ["y", "yes"]:
-                print(f"\n{Colors.BRIGHT_CYAN}Goodbye! 👋{Colors.RESET}\n")
-                sys.exit(0)
-        except Exception as e:
-            print_error("Unexpected error", str(e))
-            print(f"{Colors.DIM}The application will continue running{Colors.RESET}")
+        if choice == OPTION_INGEST:
+            handle_ingest(engine, db)
+        elif choice == OPTION_CHAT:
+            handle_chat(engine, db)
+        elif choice == OPTION_CREATE_USER:
+            handle_create_user(db)
+        elif choice == OPTION_EXIT:
+            print(
+                f"\n{Colors.BRIGHT_CYAN}Thanks for using Sentinel RAG! 👋{Colors.RESET}\n"
+            )
+            sys.exit(0)
+        else:
+            print_warning(f"Invalid choice: '{choice}'. Please enter 1-4.")
 
 
 if __name__ == "__main__":
