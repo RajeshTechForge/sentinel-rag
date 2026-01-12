@@ -287,12 +287,18 @@ class DatabaseManager:
         return str(doc_id)
 
     def search_documents(
-        self, query_embedding: List[float], filters: List[tuple], k: int = 5
+        self,
+        query_embedding: List[float],
+        filters: List[tuple],
+        k: int = 20,
+        threshold: float = 0.4,
     ) -> List[Document]:
         """
-        Search for documents using vector similarity and RBAC filters.
+        Search for documents using multi-stage filtering based on RBAC.
+
         """
         if not filters:
+            # Tip: Log this as a security warning, don't just print it.
             print("No access filters provided. Access denied.")
             return []
 
@@ -314,30 +320,42 @@ class DatabaseManager:
             JOIN documents d ON dc.doc_id = d.doc_id
             JOIN departments dept ON d.department_id = dept.department_id
             WHERE ({where_sql})
+              AND (dc.embedding <=> %s::vector) < %s  -- THE FILTER
             ORDER BY distance ASC
             LIMIT %s
         """
-
-        # Params: query_embedding, then all the dept/cls pairs, then k
-        full_params = [query_embedding] + params + [k]
+        # We use 1 - threshold because <=> is distance (0 = identical),
+        # but threshold is usually similarity (1 = identical).
+        full_params = [query_embedding] + params + [query_embedding, 1 - threshold, k]
 
         results = []
-        with self._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query_sql, full_params)
-                rows = cur.fetchall()
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(query_sql, full_params)
+                    rows = cur.fetchall()
 
-                for row in rows:
-                    metadata = row["metadata"] or {}
-                    metadata["source"] = row["filename"]
-                    metadata["department"] = row["department"]
-                    metadata["classification"] = row["classification"]
-                    metadata["score"] = (
-                        1 - row["distance"]
-                    )  # Convert distance to similarity score if needed
+                    if not rows:
+                        # Tip: Log this event for monitoring purposes
+                        return []
 
-                    results.append(
-                        Document(page_content=row["content"], metadata=metadata)
-                    )
+                    for row in rows:
+                        similarity_score = 1 - row["distance"]
+
+                        metadata = {
+                            **(row["metadata"] or {}),
+                            "source": row["filename"],
+                            "department": row["department"],
+                            "classification": row["classification"],
+                            "score": round(similarity_score, 4),
+                        }
+
+                        results.append(
+                            Document(page_content=row["content"], metadata=metadata)
+                        )
+        except Exception as e:
+            # Tip: Proper error handling/logging
+            print(f"Database error during retrieval: {e}")
+            raise
 
         return results
