@@ -49,7 +49,6 @@ async def query_documents(
         results = engine.query(
             request.user_query,
             user_id=user.user_id,
-            k=request.k,
         )
 
         vector_time = (datetime.now() - start_time).total_seconds() * 1000
@@ -103,7 +102,6 @@ async def query_documents(
             data_redacted=pii_detected,
             metadata={
                 "chunks_retrieved": len(results),
-                "k_requested": request.k,
                 "total_time_ms": round(total_time, 2),
                 "tenant_id": user.tenant_id,
             },
@@ -122,7 +120,6 @@ async def query_documents(
             total_response_time_ms=round(total_time, 2),
             filters_applied={
                 "user_id": user.user_id,
-                "k": request.k,
                 "tenant_id": user.tenant_id,
             },
             chunks_filtered=0,
