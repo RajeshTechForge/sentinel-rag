@@ -54,11 +54,14 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     page_number INTEGER,
     chunk_index INTEGER,
     embedding vector(1536),
+    searchable_text_tsvector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
     metadata JSONB
 );
 
 -- INDEXES FOR PERFORMANCE
 -- -----------------------
+
+CREATE INDEX IF NOT EXISTS idx_chunks_fts ON document_chunks USING gin(searchable_text_tsvector);
 
 CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);

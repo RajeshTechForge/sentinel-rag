@@ -109,7 +109,8 @@ class SentinelEngine:
             raise QueryError(f"Failed to generate query embedding: {e}")
 
         try:
-            results = self.db.search_documents(query_embedding, filters, k=k)
+            # Pass 'question' (text) along with the embedding
+            results = self.db.search_documents(question, query_embedding, filters, k=k)
 
             if results:
                 results = self.pii_manager.reduce_pii_documents(results)

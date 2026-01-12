@@ -286,12 +286,16 @@ class DatabaseManager:
         print(f"Saved {len(documents)} document chunks to database.")
         return str(doc_id)
 
+    # HYBRID SEARCH (VECTOR + KEYWORD) WITH RBAC FILTERS
+    # --------------------------------------------------
     def search_documents(
         self,
+        query_text: str,
         query_embedding: List[float],
         filters: List[tuple],
         k: int = 20,
         threshold: float = 0.4,
+        rrf_k: int = 60,
     ) -> List[Document]:
         """
         Search for documents using multi-stage filtering based on RBAC.
@@ -314,19 +318,64 @@ class DatabaseManager:
         where_sql = " OR ".join(where_clauses)
 
         query_sql = f"""
-            SELECT dc.content, dc.metadata, d.filename, dept.department_name as department, d.classification, 
-                   (dc.embedding <=> %s::vector) as distance
+            WITH vector_search AS (
+                SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY dc.embedding <=> %s::vector) as rank
+                FROM document_chunks dc
+                JOIN documents d ON dc.doc_id = d.doc_id
+                JOIN departments dept ON d.department_id = dept.department_id
+                WHERE ({where_sql})
+                  AND (dc.embedding <=> %s::vector) < %s
+                ORDER BY dc.embedding <=> %s::vector
+                LIMIT 20
+            ),
+            keyword_search AS (
+                SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY ts_rank_cd(dc.searchable_text_tsvector, websearch_to_tsquery('english', %s)) DESC) as rank
+                FROM document_chunks dc
+                JOIN documents d ON dc.doc_id = d.doc_id
+                JOIN departments dept ON d.department_id = dept.department_id
+                WHERE dc.searchable_text_tsvector @@ websearch_to_tsquery('english', %s)
+                  AND ({where_sql})
+                ORDER BY rank
+                LIMIT 20
+            )
+            SELECT 
+                dc.content, 
+                dc.metadata,
+                d.filename,
+                dept.department_name as department,
+                d.classification,
+                COALESCE(1.0 / ({rrf_k} + vs.rank), 0.0) + 
+                COALESCE(1.0 / ({rrf_k} + ks.rank), 0.0) AS rrf_score
             FROM document_chunks dc
+            LEFT JOIN vector_search vs ON dc.chunk_id = vs.chunk_id
+            LEFT JOIN keyword_search ks ON dc.chunk_id = ks.chunk_id
             JOIN documents d ON dc.doc_id = d.doc_id
             JOIN departments dept ON d.department_id = dept.department_id
-            WHERE ({where_sql})
-              AND (dc.embedding <=> %s::vector) < %s  -- THE FILTER
-            ORDER BY distance ASC
-            LIMIT %s
+            WHERE vs.chunk_id IS NOT NULL OR ks.chunk_id IS NOT NULL
+            ORDER BY rrf_score DESC
+            LIMIT %s;
         """
-        # We use 1 - threshold because <=> is distance (0 = identical),
-        # but threshold is usually similarity (1 = identical).
-        full_params = [query_embedding] + params + [query_embedding, 1 - threshold, k]
+
+        # Order logic:
+        # 1. Vector Search CTE:
+        #    - embedding (for rank window func)
+        #    - params (for RBAC where)
+        #    - embedding (for distance check)
+        #    - threshold (1 - threshold for distance check)
+        #    - embedding (for ORDER BY)
+        # 2. Keyword Search CTE:
+        #    - text (for rank)
+        #    - text (for where)
+        #    - params (for RBAC where)
+        # 3. Outer Limit: k
+        full_params = (
+            [query_embedding]
+            + params
+            + [query_embedding, 1 - threshold, query_embedding]
+            + [query_text, query_text]
+            + params
+            + [k]
+        )
 
         results = []
         try:
@@ -340,14 +389,14 @@ class DatabaseManager:
                         return []
 
                     for row in rows:
-                        similarity_score = 1 - row["distance"]
+                        score = row["rrf_score"]
 
                         metadata = {
                             **(row["metadata"] or {}),
                             "source": row["filename"],
                             "department": row["department"],
                             "classification": row["classification"],
-                            "score": round(similarity_score, 4),
+                            "score": round(score, 4),
                         }
 
                         results.append(
