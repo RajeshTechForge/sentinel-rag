@@ -4,6 +4,9 @@ Command Line Interface for Sentinel RAG System.
 This module provides an interactive CLI for testing the Sentinel-RAG system locally.
 Designed for developers to test functions by bypassing auth checks.
 
+No Error Handling or Input Validation. So that you can see Raw Exceptions
+directly for Better Debugging.
+
 """
 
 import os
@@ -163,171 +166,153 @@ def handle_ingest(rag: SentinelEngine, db: DatabaseManager) -> None:
     """Handle document ingestion with enhanced UX."""
     print_header("📄 Document Ingestion")
 
-    try:
-        # Get file path
-        path = print_prompt("File or directory path:")
-        if not path:
-            print_error("Path cannot be empty")
-            return
+    # Get file path
+    path = print_prompt("File or directory path:")
+    if not path:
+        print_error("Path cannot be empty")
+        return
 
-        # Validate path exists
-        if not Path(path).exists():
-            print_error("Path does not exist", f"Cannot find: {path}")
-            return
+    # Validate path exists
+    if not Path(path).exists():
+        print_error("Path does not exist", f"Cannot find: {path}")
+        return
 
-        # Get metadata
-        title = print_prompt("Document title (optional, press Enter to skip):")
-        description = print_prompt(
-            "Document description (optional, press Enter to skip):"
+    # Get metadata
+    title = print_prompt("Document title (optional, press Enter to skip):")
+    description = print_prompt("Document description (optional, press Enter to skip):")
+
+    # Get user
+    email = print_prompt("User email for attribution:")
+    if not email:
+        print_error("User email is required for document attribution")
+        return
+
+    user = db.get_user_by_email(email)
+    if not user:
+        print_error("User not found", f"No user exists with email: {email}")
+        print_info("Tip: Use option 3 to create a new user")
+        return
+
+    user_id = str(user["user_id"])
+    user_name = user.get("full_name", email)
+    print_success(f"User verified: {user_name}")
+
+    # Get department
+    department_name = print_prompt("Department name:").lower()
+    if not department_name:
+        print_error("Department name is required")
+        return
+
+    department_id = db.get_department_id_by_name(department_name)
+    if not department_id:
+        print_error(
+            "Department not found",
+            f"'{department_name}' does not exist in the system",
         )
+        print_info("Available departments can be queried through the database")
+        return
 
-        # Get user
-        email = print_prompt("User email for attribution:")
-        if not email:
-            print_error("User email is required for document attribution")
-            return
+    # Get classification
+    classification = print_prompt(
+        "Classification (public/internal/confidential):"
+    ).lower()
+    valid_classifications = ["public", "internal", "confidential"]
 
-        user = db.get_user_by_email(email)
-        if not user:
-            print_error("User not found", f"No user exists with email: {email}")
-            print_info("Tip: Use option 3 to create a new user")
-            return
-
-        user_id = str(user["user_id"])
-        user_name = user.get("full_name", email)
-        print_success(f"User verified: {user_name}")
-
-        # Get department
-        department_name = print_prompt("Department name:").lower()
-        if not department_name:
-            print_error("Department name is required")
-            return
-
-        department_id = db.get_department_id_by_name(department_name)
-        if not department_id:
-            print_error(
-                "Department not found",
-                f"'{department_name}' does not exist in the system",
-            )
-            print_info("Available departments can be queried through the database")
-            return
-
-        # Get classification
-        classification = print_prompt(
-            "Classification (public/internal/confidential):"
-        ).lower()
-        valid_classifications = ["public", "internal", "confidential"]
-
-        if classification not in valid_classifications:
-            print_error(
-                "Invalid classification",
-                f"Must be one of: {', '.join(valid_classifications)}",
-            )
-            return
-
-        # Confirm and ingest
-        print_divider()
-        print_info("Starting document ingestion...")
-        print(f"{Colors.DIM}  Path: {path}")
-        print(f"  Department: {department_name}")
-        print(f"  Classification: {classification}")
-        print(f"  Attributed to: {user_name}{Colors.RESET}")
-        print_divider()
-
-        rag.ingest_documents(
-            source=path,
-            title=title or None,
-            description=description or None,
-            user_id=user_id,
-            department_id=department_id,
-            classification=classification,
+    if classification not in valid_classifications:
+        print_error(
+            "Invalid classification",
+            f"Must be one of: {', '.join(valid_classifications)}",
         )
+        return
 
-        print_success("Documents ingested successfully!")
+    # Confirm and ingest
+    print_divider()
+    print_info("Starting document ingestion...")
+    print(f"{Colors.DIM}  Path: {path}")
+    print(f"  Department: {department_name}")
+    print(f"  Classification: {classification}")
+    print(f"  Attributed to: {user_name}{Colors.RESET}")
+    print_divider()
 
-    except FileNotFoundError as e:
-        print_error("File not found", str(e))
-    except PermissionError as e:
-        print_error("Permission denied", str(e))
-    except Exception as e:
-        print_error("Ingestion failed", str(e))
-        print(f"\n{Colors.DIM}Stack trace available in logs{Colors.RESET}")
+    rag.ingest_documents(
+        source=path,
+        title=title or None,
+        description=description or None,
+        user_id=user_id,
+        department_id=department_id,
+        classification=classification,
+    )
+
+    print_success("Documents ingested successfully!")
 
 
 def handle_create_user(db: DatabaseManager) -> None:
     """Handle user creation with enhanced validation."""
     print_header("👤 Create New User")
 
-    try:
-        # Get user details
-        email = print_prompt("Email address:").lower()
-        if not email:
-            print_error("Email is required")
-            return
+    # Get user details
+    email = print_prompt("Email address:").lower()
+    if not email:
+        print_error("Email is required")
+        return
 
-        # Check if user already exists
-        existing_user = db.get_user_by_email(email)
-        if existing_user:
-            print_warning("User already exists with this email")
-            print_info(f"Existing user: {existing_user.get('full_name', 'N/A')}")
-            return
+    # Check if user already exists
+    existing_user = db.get_user_by_email(email)
+    if existing_user:
+        print_warning("User already exists with this email")
+        print_info(f"Existing user: {existing_user.get('full_name', 'N/A')}")
+        return
 
-        name = print_prompt("Full name:")
-        if not name:
-            print_error("Full name is required")
-            return
+    name = print_prompt("Full name:")
+    if not name:
+        print_error("Full name is required")
+        return
 
-        department = print_prompt("Department name:").lower()
-        if not department:
-            print_error("Department name is required")
-            return
+    department = print_prompt("Department name:").lower()
+    if not department:
+        print_error("Department name is required")
+        return
 
-        # Check available roles
-        available_roles = db.get_roles_by_department(department)
-        if not available_roles:
-            print_error(
-                "Department not found or has no roles",
-                f"Department '{department}' does not exist or has no configured roles",
-            )
-            return
+    # Check available roles
+    available_roles = db.get_roles_by_department(department)
+    if not available_roles:
+        print_error(
+            "Department not found or has no roles",
+            f"Department '{department}' does not exist or has no configured roles",
+        )
+        return
 
-        print_info(f"Available roles in '{department}': {', '.join(available_roles)}")
+    print_info(f"Available roles in '{department}': {', '.join(available_roles)}")
 
-        role = print_prompt("Role name:").lower()
-        if not role:
-            print_error("Role name is required")
-            return
+    role = print_prompt("Role name:").lower()
+    if not role:
+        print_error("Role name is required")
+        return
 
-        if role not in available_roles:
-            print_error(
-                "Invalid role",
-                f"Role '{role}' is not available in department '{department}'",
-            )
-            print_info(f"Choose from: {', '.join(available_roles)}")
-            return
+    if role not in available_roles:
+        print_error(
+            "Invalid role",
+            f"Role '{role}' is not available in department '{department}'",
+        )
+        print_info(f"Choose from: {', '.join(available_roles)}")
+        return
 
-        # Confirm creation
-        print_divider()
-        print_info("Creating user with the following details:")
-        print(f"{Colors.DIM}  Email: {email}")
-        print(f"  Name: {name}")
-        print(f"  Department: {department}")
-        print(f"  Role: {role}{Colors.RESET}")
-        print_divider()
+    # Confirm creation
+    print_divider()
+    print_info("Creating user with the following details:")
+    print(f"{Colors.DIM}  Email: {email}")
+    print(f"  Name: {name}")
+    print(f"  Department: {department}")
+    print(f"  Role: {role}{Colors.RESET}")
+    print_divider()
 
-        # Create user
-        uid = db.create_user(email, name)
-        db.assign_role(uid, role, department)
+    # Create user
+    uid = db.create_user(email, name)
+    db.assign_role(uid, role, department)
 
-        print_success("User created successfully!")
-        print(f"{Colors.GREEN}  User ID: {uid}")
-        print(f"  Role '{role}' assigned in department '{department}'{Colors.RESET}")
-
-    except ValueError as e:
-        print_error("Invalid input", str(e))
-    except Exception as e:
-        print_error("User creation failed", str(e))
-        print(f"\n{Colors.DIM}Stack trace available in logs{Colors.RESET}")
+    print_success("User created successfully!")
+    print(f"{Colors.GREEN}  User ID: {uid}")
+    print(f"  Role '{role}' assigned in department '{department}'{Colors.RESET}")
 
 
 def handle_chat(rag: SentinelEngine, db: DatabaseManager) -> None:
@@ -425,17 +410,10 @@ def main() -> NoReturn:
         print_warning("SENTINEL_CONFIG_PATH not set, using defaults")
 
     # Initialize system
-    try:
-        print_info("Initializing Sentinel RAG System...")
-        db = DatabaseManager()
-        engine = SentinelEngine(db=db, config_file=config)
-        print_success("System initialized successfully\n")
-    except Exception as e:
-        print_error("Failed to initialize system", str(e))
-        print(
-            f"\n{Colors.BRIGHT_RED}Cannot proceed without valid system initialization{Colors.RESET}"
-        )
-        sys.exit(1)
+    print_info("Initializing Sentinel RAG System...")
+    db = DatabaseManager()
+    engine = SentinelEngine(db=db, config_file=config)
+    print_success("System initialized successfully\n")
 
     # Main loop
     while True:
