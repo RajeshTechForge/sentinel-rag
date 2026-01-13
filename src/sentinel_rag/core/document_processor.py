@@ -89,6 +89,8 @@ class DocumentProcessor:
 
         return score / pages_to_check if pages_to_check > 0 else 0
 
+    #    Intelligent PDF Parsing
+    # -------------------------------
     def pdf_parser(self, file_path: str) -> str:
         doc = None
         try:
@@ -104,6 +106,8 @@ class DocumentProcessor:
             result = self.docling_parser.convert(file_path)
             return result.document.export_to_markdown()
 
+    #   Universal Smart Document Parser
+    # ------------------------------------
     def smart_doc_parser(self, file_path: str) -> Optional[str]:
         if not os.path.exists(file_path):
             raise DocumentProcessorError(f"File not found: {file_path}")
@@ -121,7 +125,9 @@ class DocumentProcessor:
                     return f.read()
             raise DocumentProcessorError(f"Unsupported file format: {ext}")
 
-    def markdown_to_chunks(
+    #   Context-Aware Chunking
+    # ---------------------------
+    def create_context_aware_chunks(
         self, markdown_text: str, chunk_size: int = 1000, chunk_overlap: int = 100
     ) -> list:
         # Define the headers need to split
@@ -153,3 +159,79 @@ class DocumentProcessor:
             raise DocumentProcessorError(f"Error during markdown splitting: {e}")
 
         return final_chunks
+
+    # Context-Aware Hierarchical chunking for Parent-Document Retrieval
+    # -----------------------------------------------------------------
+    def create_context_aware_hierarchical_chunks(
+        self,
+        markdown_text: str,
+        parent_chunk_size: int = 2000,
+        parent_overlap: int = 200,
+        child_chunk_size: int = 400,
+        child_overlap: int = 50,
+    ) -> dict:
+        """
+        Create hierarchical chunks for Parent-Document Retrieval.
+
+        Returns:
+            dict: {
+                'parent_chunks': List[Document],  # Larger chunks for context
+                'child_chunks': List[Document],   # Smaller chunks for search
+                'relationships': List[tuple]       # (parent_idx, child_idx) mappings
+            }
+        """
+        # First, create larger parent chunks
+        headers_to_split_on = [
+            ("#", "Header 1"),
+            ("##", "Header 2"),
+            ("###", "Header 3"),
+        ]
+
+        try:
+            # Split by headers first
+            markdown_splitter = MarkdownHeaderTextSplitter(
+                headers_to_split_on=headers_to_split_on, strip_headers=False
+            )
+            md_header_splits = markdown_splitter.split_text(markdown_text)
+
+            # Create parent chunks (larger, for context)
+            parent_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=parent_chunk_size,
+                chunk_overlap=parent_overlap,
+                separators=["\n\n\n", "\n\n", "\n", ".", " ", ""],
+            )
+            parent_chunks = parent_splitter.split_documents(md_header_splits)
+
+            # Create child chunks from each parent (smaller, for precise search)
+            child_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=child_chunk_size,
+                chunk_overlap=child_overlap,
+                separators=["\n\n", "\n", ".", " ", ""],
+            )
+
+            all_child_chunks = []
+            relationships = []  # (parent_idx, child_idx)
+
+            for parent_idx, parent_chunk in enumerate(parent_chunks):
+                # Split parent into children
+                children = child_splitter.split_documents([parent_chunk])
+
+                for child in children:
+                    child_idx = len(all_child_chunks)
+                    # Add parent reference to child metadata
+                    child.metadata["parent_index"] = parent_idx
+                    all_child_chunks.append(child)
+                    relationships.append((parent_idx, child_idx))
+
+                # Mark parent chunk metadata
+                parent_chunk.metadata["is_parent"] = True
+                parent_chunk.metadata["parent_index"] = parent_idx
+
+            return {
+                "parent_chunks": parent_chunks,
+                "child_chunks": all_child_chunks,
+                "relationships": relationships,
+            }
+
+        except Exception as e:
+            raise DocumentProcessorError(f"Error during hierarchical chunking: {e}")
