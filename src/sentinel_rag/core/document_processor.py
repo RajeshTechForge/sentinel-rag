@@ -89,6 +89,8 @@ class DocumentProcessor:
 
         return score / pages_to_check if pages_to_check > 0 else 0
 
+    #    Intelligent PDF Parsing
+    # -------------------------------
     def pdf_parser(self, file_path: str) -> str:
         doc = None
         try:
@@ -104,6 +106,8 @@ class DocumentProcessor:
             result = self.docling_parser.convert(file_path)
             return result.document.export_to_markdown()
 
+    #   Universal Smart Document Parser
+    # ------------------------------------
     def smart_doc_parser(self, file_path: str) -> Optional[str]:
         if not os.path.exists(file_path):
             raise DocumentProcessorError(f"File not found: {file_path}")
@@ -121,7 +125,9 @@ class DocumentProcessor:
                     return f.read()
             raise DocumentProcessorError(f"Unsupported file format: {ext}")
 
-    def markdown_to_chunks(
+    #   Context-Aware Chunking
+    # ---------------------------
+    def create_context_aware_chunks(
         self, markdown_text: str, chunk_size: int = 1000, chunk_overlap: int = 100
     ) -> list:
         # Define the headers need to split
