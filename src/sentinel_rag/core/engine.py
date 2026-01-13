@@ -29,6 +29,7 @@ class SentinelEngine:
         user_id: str,
         department_id: str,
         classification: str,
+        use_hierarchical: bool = False,
     ):
         """Uploads documents from path or UploadFile, splits them, generates embeddings and stores in DB."""
 
@@ -65,37 +66,89 @@ class SentinelEngine:
         if not doc_content:
             raise DocumentIngestionError("No documents found in the provided source.")
 
-        doc_chunks = self.doc_processor.markdown_to_chunks(doc_content)
-        if not doc_chunks:
-            raise DocumentIngestionError("No text chunks created from documents.")
-
-        try:
-            print("Generating embeddings...")
-            text_content = [doc.page_content for doc in doc_chunks]
-            embeddings = self.embeddings.embed_documents(text_content)
-            # Ensure embedding is a list of standard floats to avoid numpy types
-            embeddings = [[float(x) for x in emb] for emb in embeddings]
-
-        except Exception as e:
-            raise DocumentIngestionError(f"Failed to generate embeddings: {e}")
-
-        try:
-            print("Saving to database...")
-            doc_id = self.db.save_documents(
-                doc_chunks,
-                embeddings,
-                title,
-                description,
-                user_id,
-                department_id,
-                classification,
+        # Choose chunking strategy
+        if use_hierarchical:
+            # Use Parent-Document Retrieval with hierarchical chunks
+            chunk_data = self.doc_processor.create_context_aware_hierarchical_chunks(
+                doc_content
             )
-            print("Ingestion complete.")
-            return doc_id
-        except Exception as e:
-            raise DocumentIngestionError(f"Failed to save documents to database: {e}")
+            parent_chunks = chunk_data["parent_chunks"]
+            child_chunks = chunk_data["child_chunks"]
+            relationships = chunk_data["relationships"]
 
-    def query(self, question: str, user_id: str, k: int = 5):
+            if not child_chunks:
+                raise DocumentIngestionError("No child chunks created from documents.")
+
+            try:
+                print("Generating embeddings for child chunks...")
+                text_content = [doc.page_content for doc in child_chunks]
+                embeddings = self.embeddings.embed_documents(text_content)
+                # Ensure embedding is a list of standard floats to avoid numpy types
+                embeddings = [[float(x) for x in emb] for emb in embeddings]
+
+            except Exception as e:
+                raise DocumentIngestionError(f"Failed to generate embeddings: {e}")
+
+            try:
+                print("Saving hierarchical chunks to database...")
+                doc_id = self.db.save_hierarchical_documents(
+                    parent_chunks,
+                    child_chunks,
+                    embeddings,
+                    relationships,
+                    title,
+                    description,
+                    user_id,
+                    department_id,
+                    classification,
+                )
+                print("Hierarchical ingestion complete.")
+                return doc_id
+            except Exception as e:
+                raise DocumentIngestionError(
+                    f"Failed to save hierarchical documents to database: {e}"
+                )
+        else:
+            # Use traditional flat chunking
+            doc_chunks = self.doc_processor.create_context_aware_chunks(doc_content)
+            if not doc_chunks:
+                raise DocumentIngestionError("No text chunks created from documents.")
+
+            try:
+                print("Generating embeddings...")
+                text_content = [doc.page_content for doc in doc_chunks]
+                embeddings = self.embeddings.embed_documents(text_content)
+                # Ensure embedding is a list of standard floats to avoid numpy types
+                embeddings = [[float(x) for x in emb] for emb in embeddings]
+
+            except Exception as e:
+                raise DocumentIngestionError(f"Failed to generate embeddings: {e}")
+
+            try:
+                print("Saving to database...")
+                doc_id = self.db.save_documents(
+                    doc_chunks,
+                    embeddings,
+                    title,
+                    description,
+                    user_id,
+                    department_id,
+                    classification,
+                )
+                print("Ingestion complete.")
+                return doc_id
+            except Exception as e:
+                raise DocumentIngestionError(
+                    f"Failed to save documents to database: {e}"
+                )
+
+    def query(
+        self,
+        question: str,
+        user_id: str,
+        k: int = 5,
+        use_parent_retrieval: bool = False,
+    ):
         try:
             filters = self.rbac.get_user_access_filters(user_id, self.db)
             if not filters:
@@ -109,8 +162,14 @@ class SentinelEngine:
             raise QueryError(f"Failed to generate query embedding: {e}")
 
         try:
-            # Pass 'question' (text) along with the embedding
-            results = self.db.search_documents(question, query_embedding, filters, k=k)
+            # Pass 'question' (text) along with the embedding and parent retrieval flag
+            results = self.db.search_documents(
+                question,
+                query_embedding,
+                filters,
+                k=k,
+                use_parent_retrieval=use_parent_retrieval,
+            )
 
             if results:
                 results = self.pii_manager.reduce_pii_documents(results)
