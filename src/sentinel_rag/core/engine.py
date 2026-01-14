@@ -1,6 +1,7 @@
 import os
 import tempfile
 import shutil
+from typing import Dict
 from langchain_community.embeddings import FakeEmbeddings
 
 from .seeder import seed_initial_data
@@ -11,11 +12,10 @@ from .exceptions import DocumentIngestionError, QueryError
 
 
 class SentinelEngine:
-    def __init__(self, db=None, config_file: str | None = None):
-        self.config_file = config_file
+    def __init__(self, db=None, rbac_config: Dict = {}):
         self.db = db
-        seed_initial_data(db=self.db, config_file=self.config_file)
-        self.rbac = RbacManager(self.config_file)
+        seed_initial_data(db=self.db, rbac_config=rbac_config)
+        self.rbac = RbacManager(rbac_config)
         self.pii_manager = PiiManager()
         # self.pii_manager.warm_up()
         self.doc_processor = DocumentProcessor()

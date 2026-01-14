@@ -83,6 +83,14 @@ class RBACSettings(BaseSettings):
     roles: dict[str, list[str]] = Field(default_factory=dict)
     access_matrix: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
+    @property
+    def as_dict(self) -> dict:
+        return {
+            "departments": self.departments,
+            "roles": self.roles,
+            "access_matrix": self.access_matrix,
+        }
+
 
 class CORSSettings(BaseSettings):
     """CORS configuration."""

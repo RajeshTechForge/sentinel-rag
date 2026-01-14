@@ -414,7 +414,7 @@ def main() -> NoReturn:
     print_info("Initializing Sentinel RAG System...")
     settings = get_settings()
     db = DatabaseManager(database_url=settings.database.dsn)
-    engine = SentinelEngine(db=db, config_file=config)
+    engine = SentinelEngine(db=db, rbac_config=settings.rbac.as_dict)
     print_success("System initialized successfully\n")
 
     # Main loop

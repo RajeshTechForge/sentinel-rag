@@ -70,7 +70,7 @@ class AppState:
 
         # Initialize database and engine
         self.db = DatabaseManager(settings.database.dsn)
-        self.engine = SentinelEngine(db=self.db, config_file=settings.config_path)
+        self.engine = SentinelEngine(db=self.db, rbac_config=settings.rbac.as_dict)
 
         # Initialize audit service
         if settings.audit.enabled:
