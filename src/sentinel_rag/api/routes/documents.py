@@ -1,7 +1,8 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from sentinel_rag.services.auth import get_current_active_user, UserContext
+from sentinel_rag.api.dependencies import get_current_active_user
+from sentinel_rag.services.auth import UserContext
 from sentinel_rag.services.audit import (
     AuditLogEntry,
     EventCategory,

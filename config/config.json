@@ -1,4 +1,10 @@
 {
+    "APP_NAME": "Sentinel RAG API",
+    "APP_VERSION": "1.0.0",
+    "APP_ENV": "development",
+    "DEBUG": "false",
+    "ENABLE_AUDIT_LOGGING": "false",
+
     "DEPARTMENTS": ["finance", "hr", "engineering", "sales", "marketing"],
 
     "ROLES": {

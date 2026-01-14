@@ -1,4 +1,4 @@
-from os import getenv, path as os_path
+from os import path as os_path
 from typing import List, Optional, Dict
 from dotenv import load_dotenv
 import psycopg2
@@ -12,14 +12,9 @@ load_dotenv()
 
 
 class DatabaseManager:
-    def __init__(self):
-        self.connection_params = {
-            "host": getenv("POSTGRES_HOST", "localhost"),
-            "port": getenv("POSTGRES_PORT", "5432"),
-            "database": getenv("POSTGRES_DB", "sample_db"),
-            "user": getenv("POSTGRES_USER", "postgres"),
-            "password": getenv("POSTGRES_PASSWORD", ""),
-        }
+    def __init__(self, database_url: str):
+        self.database_url = database_url
+        self.connection_params = psycopg2.extensions.parse_dsn(database_url)
         self._init_tables()
 
     def _get_connection(self):

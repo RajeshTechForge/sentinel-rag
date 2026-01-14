@@ -1,12 +1,16 @@
 """
 Centralized Configuration Management using Pydantic Settings.
+
+This module implements a hybrid configuration approach:
+- Business logic configs (departments, roles, etc.) → JSON file
+- Environment-specific secrets (DB credentials, API keys) → .env file
 """
 
+import json
 from os import path as os_path
 from functools import lru_cache
-from typing import Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -65,9 +69,19 @@ class SecuritySettings(BaseSettings):
 class AuditSettings(BaseSettings):
     """Audit logging configuration."""
 
-    enabled: bool = Field(default=False, alias="ENABLE_AUDIT_LOGGING")
+    enabled: bool = False
     retention_years: int = Field(default=7, ge=1, le=20)
     async_logging: bool = True
+
+
+class RBACSettings(BaseSettings):
+    """Role-Based Access Control configuration loaded from JSON."""
+
+    model_config = SettingsConfigDict(extra="allow")
+
+    departments: list[str] = Field(default_factory=list)
+    roles: dict[str, list[str]] = Field(default_factory=dict)
+    access_matrix: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class CORSSettings(BaseSettings):
@@ -83,9 +97,16 @@ class AppSettings(BaseSettings):
     """
     Main application settings aggregating all configuration.
 
+    Implements hybrid configuration loading:
+    1. Loads SENTINEL_CONFIG_PATH from .env
+    2. Reads business logic config from JSON file (app metadata, RBAC)
+    3. Loads secrets/env-specific config from .env (database, OIDC, security)
+
     Usage:
         settings = get_settings()
+        print(settings.app_name)
         print(settings.database.host)
+        print(settings.rbac.departments)
     """
 
     model_config = SettingsConfigDict(
@@ -94,26 +115,18 @@ class AppSettings(BaseSettings):
         extra="ignore",
     )
 
-    # Application metadata
+    # Path to JSON config file (from .env)
+    config_path: str = Field(
+        default="../../../config/config.json", alias="SENTINEL_CONFIG_PATH"
+    )
+
+    # Application metadata (from JSON)
     app_name: str = "Sentinel RAG API"
     app_version: str = "1.0.0"
-    debug: bool = False
-    environment: str = Field(default="development", alias="APP_ENV")
+    environment: str = "development"
+    debug: bool = True
 
-    # Config file path
-    config_path: Optional[str] = Field(default=None, alias="SENTINEL_CONFIG_PATH")
-
-    @field_validator("config_path", mode="before")
-    @classmethod
-    def validate_config_path(cls, v: Optional[str]) -> str:
-        """Returns backup path if provided path is blank or does not exist."""
-        if not v or not os_path.exists(str(v)):
-            default_path = os_path.join(os_path.dirname(__file__), "default.json")
-            print("WARNING: No valid config file provided in `.env`. Using default config.")
-            return default_path
-        return str(v)
-
-    # Nested settings
+    # Nested settings (from .env)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     oidc: OIDCSettings = Field(default_factory=OIDCSettings)
     tenant: TenantSettings = Field(default_factory=TenantSettings)
@@ -124,6 +137,77 @@ class AppSettings(BaseSettings):
     )
     audit: AuditSettings = Field(default_factory=AuditSettings)
     cors: CORSSettings = Field(default_factory=CORSSettings)
+
+    # RBAC settings (from JSON)
+    rbac: RBACSettings = Field(default_factory=RBACSettings)
+
+    @model_validator(mode="after")
+    def load_json_config(self) -> "AppSettings":
+        """
+        Load configuration from JSON file after .env is loaded.
+
+        This validator runs after all fields are initialized, allowing us to:
+        1. Get config_path from .env
+        2. Load JSON file
+        3. Override app-level settings with JSON values
+        """
+        # Determine config file path
+        config_file = self._resolve_config_path()
+
+        # Load JSON configuration
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                json_config = json.load(f)
+
+            # Map JSON keys to settings (case-insensitive, flexible mapping)
+            self.app_name = json_config.get("APP_NAME", self.app_name)
+            self.app_version = json_config.get("APP_VERSION", self.app_version)
+            self.environment = json_config.get("APP_ENV", self.environment)
+            self.debug = self._parse_bool(json_config.get("DEBUG", self.debug))
+            self.audit.enabled = self._parse_bool(
+                json_config.get("ENABLE_AUDIT_LOGGING", self.audit.enabled)
+            )
+
+            # Load RBAC configuration
+            self.rbac.departments = json_config.get("DEPARTMENTS", [])
+            self.rbac.roles = json_config.get("ROLES", {})
+            self.rbac.access_matrix = json_config.get("ACCESS_MATRIX", {})
+
+            print(f"✓ Loaded configuration from: {config_file}")
+
+        except FileNotFoundError:
+            print(f"WARNING: Config file not found: {config_file}. Using defaults.")
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON in config file {config_file}: {e}")
+            raise ValueError(f"Invalid JSON configuration file: {config_file}") from e
+
+        return self
+
+    def _resolve_config_path(self) -> str:
+        """Resolve the configuration file path with fallback logic."""
+        if self.config_path and os_path.exists(self.config_path):
+            return self.config_path
+
+        # Fallback to default.json in the same directory
+        default_path = os_path.join(os_path.dirname(__file__), "default.json")
+        if os_path.exists(default_path):
+            print(f"INFO: Using default config at {default_path}")
+            return default_path
+
+        raise FileNotFoundError(
+            f"No valid config file found. Tried: {self.config_path}, {default_path}"
+        )
+
+    @staticmethod
+    def _parse_bool(value) -> bool:
+        """Parse boolean from various formats (str, bool, int)."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+        if isinstance(value, int):
+            return bool(value)
+        return False
 
     @property
     def is_production(self) -> bool:
