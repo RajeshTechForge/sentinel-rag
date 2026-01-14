@@ -15,6 +15,7 @@ import logging
 from typing import NoReturn, Optional
 from pathlib import Path
 
+from sentinel_rag.config import get_settings
 from sentinel_rag.core import SentinelEngine
 from sentinel_rag.services.database import DatabaseManager
 
@@ -411,7 +412,8 @@ def main() -> NoReturn:
 
     # Initialize system
     print_info("Initializing Sentinel RAG System...")
-    db = DatabaseManager()
+    settings = get_settings()
+    db = DatabaseManager(database_url=settings.database.dsn)
     engine = SentinelEngine(db=db, config_file=config)
     print_success("System initialized successfully\n")
 
