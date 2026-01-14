@@ -32,6 +32,14 @@ class DatabaseSettings(BaseSettings):
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
+class DocRetrievalSettings(BaseSettings):
+    """Document Retrieval configuration."""
+
+    max_retrieved_docs: int = Field(default=20, ge=1, le=100)
+    similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    rrf_constant: int = Field(default=60, ge=1, le=100)
+
+
 class OIDCSettings(BaseSettings):
     """OIDC/OAuth2 configuration."""
 
@@ -136,6 +144,7 @@ class AppSettings(BaseSettings):
 
     # Nested settings (from .env)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    doc_retrieval: DocRetrievalSettings = Field(default_factory=DocRetrievalSettings)
     oidc: OIDCSettings = Field(default_factory=OIDCSettings)
     tenant: TenantSettings = Field(default_factory=TenantSettings)
     security: SecuritySettings = Field(
@@ -174,6 +183,18 @@ class AppSettings(BaseSettings):
             self.debug = self._parse_bool(json_config.get("DEBUG", self.debug))
             self.audit.enabled = self._parse_bool(
                 json_config.get("ENABLE_AUDIT_LOGGING", self.audit.enabled)
+            )
+
+            # Load document retrieval settings
+            doc_retrieval_cfg = json_config.get("DOC_RETRIEVAL_SETTINGS", {})
+            self.doc_retrieval.max_retrieved_docs = doc_retrieval_cfg.get(
+                "max_retrieved_docs", self.doc_retrieval.max_retrieved_docs
+            )
+            self.doc_retrieval.similarity_threshold = doc_retrieval_cfg.get(
+                "similarity_threshold", self.doc_retrieval.similarity_threshold
+            )
+            self.doc_retrieval.rrf_constant = doc_retrieval_cfg.get(
+                "rrf_constant", self.doc_retrieval.rrf_constant
             )
 
             # Load RBAC configuration

@@ -70,7 +70,13 @@ class AppState:
 
         # Initialize database and engine
         self.db = DatabaseManager(settings.database.dsn)
-        self.engine = SentinelEngine(db=self.db, rbac_config=settings.rbac.as_dict)
+        self.engine = SentinelEngine(
+            db=self.db,
+            rbac_config=settings.rbac.as_dict,
+            max_retrieved_docs=settings.doc_retrieval.max_retrieved_docs,
+            similarity_threshold=settings.doc_retrieval.similarity_threshold,
+            rrf_constant=settings.doc_retrieval.rrf_constant,
+        )
 
         # Initialize audit service
         if settings.audit.enabled:

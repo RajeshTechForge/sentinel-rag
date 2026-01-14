@@ -411,10 +411,10 @@ class DatabaseManager:
         query_text: str,
         query_embedding: List[float],
         filters: List[tuple],
-        k: int = 20,
-        threshold: float = 0.4,
+        k: int = 0,
+        threshold: float = 0,
         rrf_k: int = 60,
-        use_parent_retrieval: bool = True,
+        use_parent_retrieval: bool = False,
     ) -> List[Document]:
         """
         Search for documents using multi-stage filtering based on RBAC.
@@ -450,7 +450,7 @@ class DatabaseManager:
                       AND dc.embedding IS NOT NULL
                       AND (dc.embedding <=> %s::vector) < %s
                     ORDER BY dc.embedding <=> %s::vector
-                    LIMIT 20
+                    LIMIT %s
                 ),
                 keyword_search AS (
                     SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY ts_rank_cd(dc.searchable_text_tsvector, websearch_to_tsquery('english', %s)) DESC) as rank
@@ -461,7 +461,7 @@ class DatabaseManager:
                       AND ({where_sql})
                       AND dc.chunk_type = 'child'
                     ORDER BY rank
-                    LIMIT 20
+                    LIMIT %s
                 ),
                 matched_children AS (
                     SELECT DISTINCT
@@ -494,9 +494,10 @@ class DatabaseManager:
             full_params = (
                 [query_embedding]
                 + params
-                + [query_embedding, 1 - threshold, query_embedding]
+                + [query_embedding, 1 - threshold, query_embedding, k + 10]
                 + [query_text, query_text]
                 + params
+                + [k + 10]
                 + [k]
             )
         else:
@@ -510,7 +511,7 @@ class DatabaseManager:
                     WHERE ({where_sql})
                       AND (dc.embedding <=> %s::vector) < %s
                     ORDER BY dc.embedding <=> %s::vector
-                    LIMIT 20
+                    LIMIT %s
                 ),
                 keyword_search AS (
                     SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY ts_rank_cd(dc.searchable_text_tsvector, websearch_to_tsquery('english', %s)) DESC) as rank
@@ -520,7 +521,7 @@ class DatabaseManager:
                     WHERE dc.searchable_text_tsvector @@ websearch_to_tsquery('english', %s)
                       AND ({where_sql})
                     ORDER BY rank
-                    LIMIT 20
+                    LIMIT %s
                 )
                 SELECT 
                     dc.content, 
@@ -543,9 +544,10 @@ class DatabaseManager:
             full_params = (
                 [query_embedding]
                 + params
-                + [query_embedding, 1 - threshold, query_embedding]
+                + [query_embedding, 1 - threshold, query_embedding, k + 10]
                 + [query_text, query_text]
                 + params
+                + [k + 10]
                 + [k]
             )
 

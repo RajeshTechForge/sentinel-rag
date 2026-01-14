@@ -1,6 +1,7 @@
 from .config import (
     AppSettings,
     DatabaseSettings,
+    DocRetrievalSettings,
     AuditSettings,
     RBACSettings,
     SecuritySettings,
@@ -13,6 +14,7 @@ from .config import (
 __all__ = [
     "AppSettings",
     "DatabaseSettings",
+    "DocRetrievalSettings",
     "AuditSettings",
     "RBACSettings",
     "SecuritySettings",
