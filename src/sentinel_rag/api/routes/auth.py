@@ -1,4 +1,3 @@
-import os
 import secrets
 from datetime import datetime, timezone, timedelta
 from typing import List
@@ -11,14 +10,12 @@ from sentinel_rag.api.dependencies import (
     DatabaseDep,
     RequestContextDep,
     AuditServiceDep,
+    SettingsDep,
 )
 from sentinel_rag.services.auth import (
     TenantConfig,
     register_tenant_client,
     create_access_token,
-    SECRET_KEY,
-    ALGORITHM,
-    ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 from sentinel_rag.services.audit import (
     AuditLogEntry,
@@ -49,22 +46,24 @@ class RegistrationOptionsResponse(BaseModel):
     roles: List[dict]  # List of {role_name, department_name}
 
 
-given_tenant_config: TenantConfig = {
-    "tenant_id": os.getenv("TENANT_ID"),
-    "domain": os.getenv("TENANT_DOMAIN"),
-    "oidc_config": {
-        "client_id": os.getenv("OIDC_CLIENT_ID"),
-        "client_secret": os.getenv("OIDC_CLIENT_SECRET"),
-        "server_metadata_url": os.getenv("OIDC_SERVER_METADATA_URL"),
-    },
-}
-
-
 router = APIRouter()
 
 
+def _build_tenant_config(settings: SettingsDep) -> TenantConfig:
+    """Build TenantConfig from AppSettings."""
+    return TenantConfig(
+        tenant_id=settings.tenant.tenant_id,
+        domain=settings.tenant.domain,
+        oidc_config={
+            "client_id": settings.oidc.client_id,
+            "client_secret": settings.oidc.client_secret,
+            "server_metadata_url": settings.oidc.server_metadata_url,
+        },
+    )
+
+
 @router.get("/login")
-async def login(request: Request):
+async def login(request: Request, settings: SettingsDep):
     """
     The login endpoint initiates the OIDC authentication flow by redirecting the user
     to the identity provider's authorization URL.
@@ -73,17 +72,19 @@ async def login(request: Request):
         redirect_uri (optional): URL to redirect to after successful authentication.
                                  The access token will be appended as a query parameter.
     """
+    # Build tenant config from settings
+    tenant_config = _build_tenant_config(settings)
+
     # Validate OIDC configuration before attempting login
-    oidc_config = given_tenant_config.get("oidc_config", {})
     missing_config = []
 
-    if not given_tenant_config.get("tenant_id"):
+    if not tenant_config.tenant_id:
         missing_config.append("TENANT_ID")
-    if not oidc_config.get("client_id"):
+    if not tenant_config.oidc_config.client_id:
         missing_config.append("OIDC_CLIENT_ID")
-    if not oidc_config.get("client_secret"):
+    if not tenant_config.oidc_config.client_secret:
         missing_config.append("OIDC_CLIENT_SECRET")
-    if not oidc_config.get("server_metadata_url"):
+    if not tenant_config.oidc_config.server_metadata_url:
         missing_config.append("OIDC_SERVER_METADATA_URL")
 
     if missing_config:
@@ -93,7 +94,7 @@ async def login(request: Request):
         )
 
     try:
-        client = register_tenant_client(given_tenant_config)
+        client = register_tenant_client(tenant_config)
     except Exception as e:
         raise HTTPException(
             status_code=503,
@@ -104,7 +105,7 @@ async def login(request: Request):
 
     # Create secure state parameter with optional frontend redirect
     state_data = {
-        "tenant_id": given_tenant_config["tenant_id"],
+        "tenant_id": tenant_config.tenant_id,
         "nonce": secrets.token_urlsafe(32),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -115,7 +116,9 @@ async def login(request: Request):
     if frontend_redirect:
         state_data["frontend_redirect"] = frontend_redirect
 
-    state_token = jwt.encode({"alg": ALGORITHM}, state_data, SECRET_KEY).decode("utf-8")
+    state_token = jwt.encode(
+        {"alg": settings.security.algorithm}, state_data, settings.security.secret_key
+    ).decode("utf-8")
 
     try:
         return await client.authorize_redirect(
@@ -145,6 +148,7 @@ async def auth_callback(
     context: RequestContextDep,
     audit: AuditServiceDep,
     db: DatabaseDep,
+    settings: SettingsDep,
 ):
     """
     The authentication callback endpoint processes the response from the identity provider.
@@ -159,7 +163,7 @@ async def auth_callback(
             raise HTTPException(status_code=400, detail="Missing state parameter")
 
         # Decode and validate state token
-        state_data = jwt.decode(state_token, SECRET_KEY)
+        state_data = jwt.decode(state_token, settings.security.secret_key)
 
         if not state_data:
             raise HTTPException(status_code=400, detail="Invalid state parameter")
@@ -172,14 +176,7 @@ async def auth_callback(
 
         # Proceed with token exchange
         tenant_id = state_data["tenant_id"]
-        tenant_config = (
-            given_tenant_config
-            if tenant_id == given_tenant_config["tenant_id"]
-            else None
-        )
-
-        if not tenant_config:
-            raise HTTPException(status_code=404, detail="Tenant not found")
+        tenant_config = _build_tenant_config(settings)
 
         # Exchange code for tokens
         client = register_tenant_client(tenant_config)
@@ -209,7 +206,9 @@ async def auth_callback(
                 "exp": (datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp(),
             }
             registration_token = jwt.encode(
-                {"alg": ALGORITHM}, registration_data, SECRET_KEY
+                {"alg": settings.security.algorithm},
+                registration_data,
+                settings.security.secret_key,
             ).decode("utf-8")
 
             # Return registration required response with token
@@ -236,7 +235,9 @@ async def auth_callback(
 
         department, role = role_dept_list[0]
 
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(
+            minutes=settings.security.access_token_expire_minutes
+        )
         access_token = create_access_token(
             data={
                 "sub": email,
@@ -245,6 +246,7 @@ async def auth_callback(
                 "role": role,
                 "department": department,
             },
+            settings=settings,
             expires_delta=access_token_expires,
         )
 
@@ -288,7 +290,7 @@ async def auth_callback(
                 httponly=True,
                 secure=True,
                 samesite="lax",
-                max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                max_age=settings.security.access_token_expire_minutes * 60,
             )
 
         return response
@@ -355,6 +357,7 @@ async def complete_registration(
     context: RequestContextDep,
     audit: AuditServiceDep,
     db: DatabaseDep,
+    settings: SettingsDep,
 ):
     """
     Complete new user registration with role and department selection.
@@ -364,7 +367,9 @@ async def complete_registration(
     """
     try:
         # Decode and validate registration token
-        token_data = jwt.decode(registration_request.registration_token, SECRET_KEY)
+        token_data = jwt.decode(
+            registration_request.registration_token, settings.security.secret_key
+        )
         token_data.validate()
 
         # Check token expiration
@@ -410,7 +415,9 @@ async def complete_registration(
         )
 
         # Create access token
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(
+            minutes=settings.security.access_token_expire_minutes
+        )
         access_token = create_access_token(
             data={
                 "sub": email,
@@ -419,6 +426,7 @@ async def complete_registration(
                 "role": registration_request.role,
                 "department": registration_request.department,
             },
+            settings=settings,
             expires_delta=access_token_expires,
         )
 
@@ -467,7 +475,7 @@ async def complete_registration(
             httponly=True,
             secure=True,
             samesite="lax",
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            max_age=settings.security.access_token_expire_minutes * 60,
         )
 
         return response

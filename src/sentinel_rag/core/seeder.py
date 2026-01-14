@@ -1,10 +1,9 @@
-from os import path as os_path
-from json import load, JSONDecodeError
+from typing import Dict
 
 from .exceptions import SeederError
 
 
-def seed_initial_data(db=None, config_file=None):
+def seed_initial_data(db=None, rbac_config: Dict = {}):
     """
     Reads config.json and populates the database with
     departments and roles if they don't already exist.
@@ -16,24 +15,10 @@ def seed_initial_data(db=None, config_file=None):
     if db is None:
         raise SeederError("Database instance is required")
 
-    if config_file is None:
-        raise SeederError("Configuration file path is required.")
-
-    if not os_path.exists(config_file):
-        raise SeederError(f"Configuration file not found at '{config_file}'.")
-
-    try:
-        with open(config_file, "r") as f:
-            config = load(f)
-    except JSONDecodeError as e:
-        raise SeederError(f"Invalid JSON in configuration file: {e}")
-    except Exception as e:
-        raise SeederError(f"Error reading configuration file: {e}")
-
     #        Fill Departments
     # ------------------------------
     existing_depts = set(db.get_all_departments())
-    target_depts = config.get("DEPARTMENTS", [])
+    target_depts = rbac_config.get("DEPARTMENTS", [])
 
     for dept_name in target_depts:
         if dept_name not in existing_depts:
@@ -49,7 +34,7 @@ def seed_initial_data(db=None, config_file=None):
         (r["role_name"], r["department_name"]) for r in existing_roles_data
     }
 
-    roles_map = config.get("ROLES", {})
+    roles_map = rbac_config.get("ROLES", {})
 
     for dept_name, roles_list in roles_map.items():
         for role_name in roles_list:

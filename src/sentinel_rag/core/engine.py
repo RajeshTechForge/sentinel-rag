@@ -1,6 +1,7 @@
 import os
 import tempfile
 import shutil
+from typing import Dict
 from langchain_community.embeddings import FakeEmbeddings
 
 from .seeder import seed_initial_data
@@ -11,15 +12,25 @@ from .exceptions import DocumentIngestionError, QueryError
 
 
 class SentinelEngine:
-    def __init__(self, db=None, config_file: str | None = None):
-        self.config_file = config_file
+    def __init__(
+        self,
+        db=None,
+        rbac_config: Dict = {},
+        max_retrieved_docs: int = 20,
+        similarity_threshold: float = 0.4,
+        rrf_constant: int = 60,
+    ):
         self.db = db
-        seed_initial_data(db=self.db, config_file=self.config_file)
-        self.rbac = RbacManager(self.config_file)
+        seed_initial_data(db=self.db, rbac_config=rbac_config)
+        self.rbac = RbacManager(rbac_config)
         self.pii_manager = PiiManager()
         # self.pii_manager.warm_up()
         self.doc_processor = DocumentProcessor()
+
         self.embeddings = FakeEmbeddings(size=1536)
+        self.max_retrieved_docs = max_retrieved_docs
+        self.similarity_threshold = similarity_threshold
+        self.rrf_constant = rrf_constant
 
     def ingest_documents(
         self,
@@ -167,7 +178,9 @@ class SentinelEngine:
                 question,
                 query_embedding,
                 filters,
-                k=k,
+                k=self.max_retrieved_docs,
+                threshold=self.similarity_threshold,
+                rrf_k=self.rrf_constant,
                 use_parent_retrieval=use_parent_retrieval,
             )
 

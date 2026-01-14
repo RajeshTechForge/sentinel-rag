@@ -6,6 +6,10 @@ from fastapi import Depends, HTTPException, Request, status
 from sentinel_rag.core import SentinelEngine
 from sentinel_rag.services.database import DatabaseManager
 from sentinel_rag.services.audit import AuditService
+from sentinel_rag.services.auth import UserContext
+from sentinel_rag.services.auth.oidc import (
+    get_current_active_user as _get_current_active_user,
+)
 from sentinel_rag.config import AppSettings, get_settings
 
 
@@ -65,8 +69,14 @@ class AppState:
             return
 
         # Initialize database and engine
-        self.db = DatabaseManager()
-        self.engine = SentinelEngine(db=self.db, config_file=settings.config_path)
+        self.db = DatabaseManager(settings.database.dsn)
+        self.engine = SentinelEngine(
+            db=self.db,
+            rbac_config=settings.rbac.as_dict,
+            max_retrieved_docs=settings.doc_retrieval.max_retrieved_docs,
+            similarity_threshold=settings.doc_retrieval.similarity_threshold,
+            rrf_constant=settings.doc_retrieval.rrf_constant,
+        )
 
         # Initialize audit service
         if settings.audit.enabled:
@@ -239,6 +249,26 @@ async def get_request_context(request: Request) -> RequestContext:
 
 
 RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
+
+
+#       AUTHENTICATION
+# ------------------------------------
+
+
+async def get_current_active_user(
+    request: Request, settings: SettingsDep
+) -> UserContext:
+    """
+    Dependency wrapper for authentication that injects settings.
+
+    This wrapper ensures settings are automatically injected into the
+    authentication function, maintaining backward compatibility with
+    existing route handlers.
+    """
+    return await _get_current_active_user(request, settings)
+
+
+CurrentUserDep = Annotated[UserContext, Depends(get_current_active_user)]
 
 
 #       COMPOSITE DEPENDENCIES

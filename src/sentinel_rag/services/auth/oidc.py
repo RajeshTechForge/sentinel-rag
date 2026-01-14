@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import Request, HTTPException, status
@@ -7,36 +6,64 @@ from authlib.integrations.starlette_client import OAuth
 from authlib.jose import jwt, JoseError
 
 from .schemas import TenantConfig, UserContext
+from sentinel_rag.config import AppSettings
 
 
-# --- Configuration ---
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
-
+# --- OAuth Client Registry ---
 oauth = OAuth()
+
 
 # --- JWT Management ---
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(
+    data: dict,
+    settings: AppSettings,
+    expires_delta: Optional[timedelta] = None,
+):
+    """
+    Create a JWT access token with the provided data.
+
+    Args:
+        data: Payload to encode in the token
+        settings: Application settings containing security configuration
+        expires_delta: Optional custom expiration time
+
+    Returns:
+        Encoded JWT token as string
+    """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=settings.security.access_token_expire_minutes
         )
     to_encode.update({"exp": expire})
 
     # Authlib jwt.encode returns bytes, we need string
-    encoded_jwt = jwt.encode({"alg": ALGORITHM}, to_encode, SECRET_KEY)
+    encoded_jwt = jwt.encode(
+        {"alg": settings.security.algorithm}, to_encode, settings.security.secret_key
+    )
     return encoded_jwt.decode("utf-8")
 
 
-def verify_token(token: str) -> UserContext:
+def verify_token(token: str, settings: AppSettings) -> UserContext:
+    """
+    Verify and decode a JWT access token.
+
+    Args:
+        token: JWT token to verify
+        settings: Application settings containing security configuration
+
+    Returns:
+        UserContext with user information
+
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
     try:
-        claims = jwt.decode(token, SECRET_KEY)
+        claims = jwt.decode(token, settings.security.secret_key)
         claims.validate()
 
         return UserContext(
@@ -55,11 +82,25 @@ def verify_token(token: str) -> UserContext:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 
-async def get_current_active_user(request: Request) -> UserContext:
+async def get_current_active_user(
+    request: Request, settings: AppSettings
+) -> UserContext:
     """
+    Extract and validate user authentication from request.
+
     Authentication token resolution priority:
     1. Authorization header (Bearer token) - for API clients
     2. Cookie (access_token) - for browser SPAs
+
+    Args:
+        request: FastAPI request object
+        settings: Application settings for token verification
+
+    Returns:
+        UserContext with authenticated user information
+
+    Raises:
+        HTTPException: If authentication fails
     """
     token = None
 
@@ -80,7 +121,7 @@ async def get_current_active_user(request: Request) -> UserContext:
         )
 
     try:
-        user_context = verify_token(token)
+        user_context = verify_token(token, settings)
         return user_context
 
     except HTTPException:

@@ -15,6 +15,7 @@ import logging
 from typing import NoReturn, Optional
 from pathlib import Path
 
+from sentinel_rag.config import get_settings
 from sentinel_rag.core import SentinelEngine
 from sentinel_rag.services.database import DatabaseManager
 
@@ -411,8 +412,15 @@ def main() -> NoReturn:
 
     # Initialize system
     print_info("Initializing Sentinel RAG System...")
-    db = DatabaseManager()
-    engine = SentinelEngine(db=db, config_file=config)
+    settings = get_settings()
+    db = DatabaseManager(database_url=settings.database.dsn)
+    engine = SentinelEngine(
+        db=db,
+        rbac_config=settings.rbac.as_dict,
+        max_retrieved_docs=settings.doc_retrieval.max_retrieved_docs,
+        similarity_threshold=settings.doc_retrieval.similarity_threshold,
+        rrf_constant=settings.doc_retrieval.rrf_constant,
+    )
     print_success("System initialized successfully\n")
 
     # Main loop

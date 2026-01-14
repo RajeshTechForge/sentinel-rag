@@ -14,8 +14,12 @@ from typing import Generator
 from fastapi.testclient import TestClient
 
 from sentinel_rag.api.app import create_application
-from sentinel_rag.api.dependencies import get_app_state
-from sentinel_rag.services.auth import get_current_active_user
+from sentinel_rag.api.dependencies import (
+    get_app_state,
+    get_current_active_user,
+    get_settings_dep,
+)
+from sentinel_rag.config import AppSettings
 from tests.test_utils import MockUserContext, create_mock_get_current_user
 
 
@@ -99,7 +103,7 @@ def client(app) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(scope="function")
-def admin_client(app) -> Generator[TestClient, None, None]:
+def admin_client(app, test_settings) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as an Admin user.
 
@@ -107,6 +111,7 @@ def admin_client(app) -> Generator[TestClient, None, None]:
 
     Args:
         app: FastAPI application instance
+        test_settings: Test configuration settings
 
     Returns:
         TestClient authenticated as admin
@@ -123,6 +128,7 @@ def admin_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_admin
     )
+    app.dependency_overrides[get_settings_dep] = lambda: test_settings
 
     with TestClient(app) as test_client:
         yield test_client
@@ -132,7 +138,7 @@ def admin_client(app) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(scope="function")
-def user_client(app) -> Generator[TestClient, None, None]:
+def user_client(app, test_settings) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as a regular User.
 
@@ -140,6 +146,7 @@ def user_client(app) -> Generator[TestClient, None, None]:
 
     Args:
         app: FastAPI application instance
+        test_settings: Test configuration settings
 
     Returns:
         TestClient authenticated as regular user
@@ -148,6 +155,7 @@ def user_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_user
     )
+    app.dependency_overrides[get_settings_dep] = lambda: test_settings
 
     with TestClient(app) as test_client:
         yield test_client
@@ -156,12 +164,13 @@ def user_client(app) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(scope="function")
-def hr_client(app) -> Generator[TestClient, None, None]:
+def hr_client(app, test_settings) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as an HR department user.
 
     Args:
         app: FastAPI application instance
+        test_settings: Test configuration settings
 
     Returns:
         TestClient authenticated as HR user
@@ -170,6 +179,7 @@ def hr_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_hr
     )
+    app.dependency_overrides[get_settings_dep] = lambda: test_settings
 
     with TestClient(app) as test_client:
         yield test_client
@@ -178,12 +188,13 @@ def hr_client(app) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(scope="function")
-def finance_client(app) -> Generator[TestClient, None, None]:
+def finance_client(app, test_settings) -> Generator[TestClient, None, None]:
     """
     Create a TestClient authenticated as a Finance department user.
 
     Args:
         app: FastAPI application instance
+        test_settings: Test configuration settings
 
     Returns:
         TestClient authenticated as Finance user
@@ -192,6 +203,7 @@ def finance_client(app) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         mock_finance
     )
+    app.dependency_overrides[get_settings_dep] = lambda: test_settings
 
     with TestClient(app) as test_client:
         yield test_client
@@ -228,9 +240,56 @@ def create_custom_client(app, user_context):
             assert response.json()["user_role"] == "CustomRole"
         ```
     """
+    from sentinel_rag.config import (
+        DatabaseSettings,
+        DocRetrievalSettings,
+        SecuritySettings,
+        OIDCSettings,
+        TenantSettings,
+        AuditSettings,
+        CORSSettings,
+        RBACSettings,
+    )
+
+    # Create minimal test settings using model_construct to bypass Pydantic validation
+    test_settings = AppSettings.model_construct(
+        config_path="",
+        app_name="Test",
+        app_version="1.0.0",
+        environment="testing",
+        debug=True,
+        database=DatabaseSettings.model_construct(
+            host="localhost",
+            port=5432,
+            database="test_db",
+            user="test_user",
+            password="test_password",
+        ),
+        doc_retrieval=DocRetrievalSettings.model_construct(
+            max_retrieved_docs=20,
+            similarity_threshold=0.4,
+            rrf_constant=60,
+        ),
+        security=SecuritySettings.model_construct(
+            secret_key="test-secret-key-minimum-32-characters-long",
+            algorithm="HS256",
+            access_token_expire_minutes=60,
+        ),
+        oidc=OIDCSettings.model_construct(
+            client_id="test",
+            client_secret="test",
+            server_metadata_url="https://test.example.com/.well-known/openid-configuration",
+        ),
+        tenant=TenantSettings.model_construct(tenant_id="test", domain="test.com"),
+        audit=AuditSettings.model_construct(enabled=False),
+        cors=CORSSettings.model_construct(),
+        rbac=RBACSettings.model_construct(departments=[], roles={}, access_matrix={}),
+    )
+
     app.dependency_overrides[get_current_active_user] = create_mock_get_current_user(
         user_context
     )
+    app.dependency_overrides[get_settings_dep] = lambda: test_settings
     return TestClient(app)
 
 
@@ -266,6 +325,78 @@ def mock_finance():
 # ========================================
 #      DATABASE & ENGINE FIXTURES
 # ========================================
+
+
+@pytest.fixture(scope="function")
+def test_settings() -> AppSettings:
+    """
+    Provide test configuration settings.
+
+    This creates an AppSettings instance suitable for testing,
+    without requiring a config.json file to exist.
+
+    Returns:
+        AppSettings configured for testing
+    """
+    from sentinel_rag.config import (
+        DatabaseSettings,
+        SecuritySettings,
+        OIDCSettings,
+        TenantSettings,
+        AuditSettings,
+        CORSSettings,
+        RBACSettings,
+    )
+
+    # Use model_construct to bypass validation for nested settings
+    return AppSettings.model_construct(
+        config_path="",  # Empty path for tests
+        app_name="Sentinel RAG Test",
+        app_version="1.0.0-test",
+        environment="testing",
+        debug=True,
+        database=DatabaseSettings.model_construct(
+            host="localhost",
+            port=5432,
+            database="test_db",
+            user="test_user",
+            password="test_password",
+        ),
+        security=SecuritySettings.model_construct(
+            secret_key="test-secret-key-for-testing-minimum-32-characters",
+            algorithm="HS256",
+            access_token_expire_minutes=60,
+        ),
+        oidc=OIDCSettings.model_construct(
+            client_id="test_client_id",
+            client_secret="test_client_secret",
+            server_metadata_url="https://test.example.com/.well-known/openid-configuration",
+        ),
+        tenant=TenantSettings.model_construct(
+            tenant_id="test-tenant-001",
+            domain="test.example.com",
+        ),
+        audit=AuditSettings.model_construct(
+            enabled=False,  # Disable audit in tests
+            retention_years=7,
+            async_logging=False,
+        ),
+        cors=CORSSettings.model_construct(),
+        rbac=RBACSettings.model_construct(
+            departments=["finance", "hr", "engineering", "sales", "marketing"],
+            roles={
+                "finance": ["accountant", "financial_analyst", "finance_manager"],
+                "hr": ["recruiter", "hr_manager", "hr_director"],
+                "engineering": [
+                    "intern",
+                    "engineer",
+                    "senior_engineer",
+                    "engineering_manager",
+                ],
+            },
+            access_matrix={},
+        ),
+    )
 
 
 @pytest.fixture

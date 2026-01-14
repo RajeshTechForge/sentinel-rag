@@ -9,7 +9,40 @@
 
 Sentinel RAG is built on the principle of **Least Privilege**. This document outlines how to configure the Role-Based Access Control (RBAC) system, define data classifications, and integrate these policies into the Sentinel engine.
 
-## 🏗️ Core Concepts
+## Overview
+
+Sentinel RAG uses a **hybrid configuration approach** that separates concerns between:
+- **Business Logic Configuration** → `config/config.json` (app metadata, RBAC, departments, roles)
+- **Environment-Specific Secrets** → `.env` file (database credentials, API keys, security settings)
+
+This design follows industry best practices:
+- ✅ **Separation of Concerns**: Business logic separate from secrets
+- ✅ **Security**: Sensitive data never committed to version control
+- ✅ **Type Safety**: Pydantic validation for all settings
+- ✅ **Dependency Injection**: Settings injected via FastAPI dependencies
+- ✅ **Testability**: Easy to override settings in tests
+
+
+## 1. General App Configuration
+
+Contains application metadata and business rules that rarely change across environments.
+
+```json
+{
+    "APP_NAME": "Sentinel RAG API",
+    "APP_VERSION": "1.0.0",
+    "APP_ENV": "development",
+    "DEBUG": "false",
+    "ENABLE_AUDIT_LOGGING": "false",
+    "DOC_RETRIEVAL_SETTINGS" : {
+        "max_retrieved_docs": 20,
+        "similarity_threshold": 0.4,
+        "rrf_constant": 60
+    },
+}
+```
+
+## 2. RBAC -Core Config 🏗️
 
 Before modifying the configuration, it is important to understand the three pillars of Sentinel-RAG's security model:
 

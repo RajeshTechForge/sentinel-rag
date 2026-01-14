@@ -215,7 +215,7 @@ def create_mock_get_current_user(user_context: UserContext):
 
     Example:
         ```python
-        from sentinel_rag.services.auth import get_current_active_user
+        from sentinel_rag.api.dependencies import get_current_active_user
 
         mock_user = MockUserContext.create_admin()
         app.dependency_overrides[get_current_active_user] = (
@@ -225,6 +225,7 @@ def create_mock_get_current_user(user_context: UserContext):
     """
 
     async def mock_get_current_user() -> UserContext:
+        """Mock that returns the user context without requiring dependencies."""
         return user_context
 
     return mock_get_current_user
