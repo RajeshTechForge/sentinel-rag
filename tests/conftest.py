@@ -242,6 +242,7 @@ def create_custom_client(app, user_context):
     """
     from sentinel_rag.config import (
         DatabaseSettings,
+        DocRetrievalSettings,
         SecuritySettings,
         OIDCSettings,
         TenantSettings,
@@ -263,6 +264,11 @@ def create_custom_client(app, user_context):
             database="test_db",
             user="test_user",
             password="test_password",
+        ),
+        doc_retrieval=DocRetrievalSettings.model_construct(
+            max_retrieved_docs=20,
+            similarity_threshold=0.4,
+            rrf_constant=60,
         ),
         security=SecuritySettings.model_construct(
             secret_key="test-secret-key-minimum-32-characters-long",

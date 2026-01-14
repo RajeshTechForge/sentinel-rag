@@ -34,6 +34,11 @@ Contains application metadata and business rules that rarely change across envir
     "APP_ENV": "development",
     "DEBUG": "false",
     "ENABLE_AUDIT_LOGGING": "false",
+    "DOC_RETRIEVAL_SETTINGS" : {
+        "max_retrieved_docs": 20,
+        "similarity_threshold": 0.4,
+        "rrf_constant": 60
+    },
 }
 ```
 

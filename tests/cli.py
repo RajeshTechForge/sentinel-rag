@@ -414,7 +414,13 @@ def main() -> NoReturn:
     print_info("Initializing Sentinel RAG System...")
     settings = get_settings()
     db = DatabaseManager(database_url=settings.database.dsn)
-    engine = SentinelEngine(db=db, rbac_config=settings.rbac.as_dict)
+    engine = SentinelEngine(
+        db=db,
+        rbac_config=settings.rbac.as_dict,
+        max_retrieved_docs=settings.doc_retrieval.max_retrieved_docs,
+        similarity_threshold=settings.doc_retrieval.similarity_threshold,
+        rrf_constant=settings.doc_retrieval.rrf_constant,
+    )
     print_success("System initialized successfully\n")
 
     # Main loop
