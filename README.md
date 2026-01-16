@@ -38,19 +38,20 @@ Most RAG implementations treat your knowledge base as a flat file system. When a
 
 ## ✨ Key Features
 
-- ⚖️ **Contextual Role-Based Access Control(RBAC):** Unlike standard vector searches, Sentinel RAG injects **dynamic metadata filters** into the retrieval process. It matches the user's JWT/Session roles against document-level permissions in real-time.
+- ⚖️ **Contextual Role-Based Access Control(RBAC):** Sentinel RAG injects **dynamic metadata filters** into the retrieval process. It matches the user's Role & Permission against document-level permissions in real-time.
 
-- 🛡️ **Automated PII Sanitization:** Built-in middleware automatically detects and masks sensitive entities using high-performance regex and NER (Named Entity Recognition) models before context is sent to the LLM.
+- 🛡️ **Automated PII Sanitization:** Built-in middleware automatically detects and masks sensitive entities before context is sent to the LLM.
 
 - 🔐 **Enterprise-Ready Authentication** Single-tenant OIDC authentication with JWT-based authorization, supporting both cookie (browser) and Bearer token (API) authentication methods.
 
 - 📝 **Immutable Compliance Logging:** Every request is audited. Sentinel RAG logs the user identity, the specific document chunks retrieved, and the sanitized prompt, providing a full trail for GDPR, HIPAA, and SOC2 compliance.
 
+- 🎯 **Industrial-Grade Rag Precision:** From advanced embeddings (_docs-to-markdown_ and _Context-Aware Hierarchical Splitting_) to _hybrid retrieval(vector + keyword)_ ensure precise context retrieval.
+
 ### ⚡ Performance-First Stack
 
 * **FastAPI & Pydantic v2:** Fully asynchronous, type-safe API.
 * **`uv` Powered:** Lightning-fast dependency management and reproducible environments.
-* **Vector Agnostic:** Native support for `pgvector`, with Qdrant integration on the roadmap.
 
 
 ## 🏗️ Architecture
@@ -136,6 +137,9 @@ Create a `.env` file based on the example:
 cp .env.example .env
 ```
 
+> [!NOTE]
+> To learn how to update configuration, refer to the [CONFIGURATION Guide](docs/CONFIGURATION.md).
+
 #### 3. Launch the API
 
 ```bash
@@ -143,23 +147,17 @@ uv run uvicorn sentinel_rag.api.app:app --reload
 
 ```
 
-> [!IMPORTANT]
-> Using Python 3.14 may cause compatibility issues due to using Pydantic v2. It is recommended to use Python 3.10 - 3.13.
-
 
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
 | --- | --- |
-| **Language** | Python 3.10 - 3.13 |
+| **Language** | Python 3.10+ |
 | **API Framework** | FastAPI (Async) |
 | **Data Validation** | Pydantic v2 |
 | **Package Manager** | uv |
 | **Vector Search** | pgvector (PostgreSQL) |
 | **Orchestration** | Docker & Docker Compose |
-
-> [!NOTE]
-> The system currently utilizes LangChain's FakeEmbeddings for demonstration purposes.
 
 
 ## 📚 Documentations
@@ -167,6 +165,7 @@ uv run uvicorn sentinel_rag.api.app:app --reload
 - [API Guide](docs/API_GUIDE.md)
 - [CONFIGURATION Guide](docs/CONFIGURATION.md)
 - [COMPLIANCE Guide](docs/COMPLIANCE.md)
+- [EMBEDDINGS Guide](docs/EMBEDDINGS_GUIDE.md)
 - [CONTRIBUTING Guidelines](CONTRIBUTING.md)
 
 
