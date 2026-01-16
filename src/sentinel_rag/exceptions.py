@@ -1,10 +1,6 @@
 from typing import Any, Dict, Optional
 
 
-#       BASE EXCEPTIONS
-# ------------------------------
-
-
 class SentinelError(Exception):
     """
     Base exception for all Sentinel RAG errors.
@@ -189,8 +185,6 @@ class DatabaseQueryError(SentinelError):
 
 
 class ConfigurationError(SentinelError):
-    """Raised when configuration is invalid."""
-
     def __init__(self, message: str = "Invalid configuration", **kwargs):
         super().__init__(
             message=message,

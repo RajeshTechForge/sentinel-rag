@@ -3,6 +3,7 @@ Custom exceptions for the Sentinel RAG system.
 
 This module provides domain-specific exceptions for better error handling
 and debugging across the application.
+
 """
 
 try:

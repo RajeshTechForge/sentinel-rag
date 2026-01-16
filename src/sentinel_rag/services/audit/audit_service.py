@@ -1,3 +1,10 @@
+"""
+Centralized audit logging service for compliance and security monitoring.
+Handles logging of user activities, data access, authentication events,
+and modifications. Designed for high throughput and minimal performance impact.
+
+"""
+
 import hashlib
 import json
 from datetime import datetime
@@ -19,11 +26,6 @@ from .schemas import (
 
 
 class AuditService:
-    """
-    Central audit logging service for compliance requirements.
-    Thread-safe and optimized for high-volume logging.
-    """
-
     def __init__(self, db_pool: asyncpg.Pool):
         self.db_pool = db_pool
 

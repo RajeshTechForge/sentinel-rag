@@ -4,21 +4,13 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
-#       BASE MODELS
-# -------------------------
-
-
 class BaseSchema(BaseModel):
-    """Base schema with common configuration."""
-
     class Config:
-        from_attributes = True  # Enable ORM mode
-        str_strip_whitespace = True  # Auto-strip strings
+        from_attributes = True
+        str_strip_whitespace = True
 
 
 class TimestampMixin(BaseModel):
-    """Mixin for timestamp fields."""
-
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -28,8 +20,6 @@ class TimestampMixin(BaseModel):
 
 
 class UserResponse(BaseSchema):
-    """Response model for user data."""
-
     user_id: UUID
     user_email: EmailStr
     user_role: str
@@ -51,7 +41,7 @@ class DocumentUploadResponse(BaseSchema):
 
 
 class DocumentMetadata(BaseSchema):
-    """Document metadata from vector store."""
+    """Document metadata from db."""
 
     doc_id: Optional[UUID] = None
     chunk_id: Optional[UUID] = None
@@ -89,7 +79,6 @@ class QueryRequest(BaseSchema):
     @field_validator("user_query")
     @classmethod
     def sanitize_query(cls, v: str) -> str:
-        # Basic sanitization - extend as needed
         return v.strip()
 
 
@@ -104,8 +93,6 @@ class QueryResponse(BaseSchema):
 
 
 class QueryAuditInfo(BaseSchema):
-    """Query audit information for logging."""
-
     chunks_retrieved: int
     documents_accessed: List[str]
     vector_search_time_ms: float
@@ -117,8 +104,6 @@ class QueryAuditInfo(BaseSchema):
 
 
 class HealthResponse(BaseSchema):
-    """Health check response."""
-
     status: str = "healthy"
     version: str
     environment: str
@@ -127,8 +112,6 @@ class HealthResponse(BaseSchema):
 
 
 class DetailedHealthResponse(HealthResponse):
-    """Detailed health check with component status."""
-
     components: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
 
@@ -137,16 +120,12 @@ class DetailedHealthResponse(HealthResponse):
 
 
 class ErrorDetail(BaseSchema):
-    """Detailed error information."""
-
     code: str
     message: str
     field: Optional[str] = None
 
 
 class ErrorResponse(BaseSchema):
-    """Standard error response format."""
-
     error: str
     message: str
     details: Optional[List[ErrorDetail]] = None
@@ -155,7 +134,5 @@ class ErrorResponse(BaseSchema):
 
 
 class ValidationErrorResponse(ErrorResponse):
-    """Validation error response."""
-
     error: str = "validation_error"
     validation_errors: List[Dict[str, Any]] = Field(default_factory=list)

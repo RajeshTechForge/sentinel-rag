@@ -1,3 +1,8 @@
+"""
+Manages PII detection and anonymization using Presidio in a multi-process setup.
+
+"""
+
 from os import cpu_count
 from concurrent.futures import ProcessPoolExecutor
 from langchain_core.documents import Document
@@ -6,7 +11,7 @@ from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 
-# Global placeholders for each worker process
+
 analyzer = None
 anonymizer = None
 
@@ -26,7 +31,6 @@ def initialize_worker():
 
 
 def process_chunk(text: str) -> str:
-    # Use the models already loaded in this process
     results = analyzer.analyze(text=text, language="en")
     operators = {"DEFAULT": OperatorConfig("replace")}
     anonymized_result = anonymizer.anonymize(
@@ -42,7 +46,6 @@ def process_document(doc: Document) -> Document:
 
 class PiiManager:
     def __init__(self):
-        # Determine number of workers (usually number of CPU cores)
         self.num_workers = cpu_count() or 1
         self.executor = ProcessPoolExecutor(
             max_workers=self.num_workers, initializer=initialize_worker

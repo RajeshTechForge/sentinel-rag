@@ -1,3 +1,8 @@
+"""
+Module for processing documents, including parsing, complexity analysis,
+and context-aware chunking.
+"""
+
 import os
 from typing import Optional
 import pymupdf
@@ -213,7 +218,6 @@ class DocumentProcessor:
             relationships = []  # (parent_idx, child_idx)
 
             for parent_idx, parent_chunk in enumerate(parent_chunks):
-                # Split parent into children
                 children = child_splitter.split_documents([parent_chunk])
 
                 for child in children:

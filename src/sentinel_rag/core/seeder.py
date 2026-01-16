@@ -1,17 +1,15 @@
-from typing import Dict
+"""
+Seeder module to populate initial data into the database.
+Reads config.json and populates the database with departments and
+roles if they don't already exist.
 
+"""
+
+from typing import Dict
 from .exceptions import SeederError
 
 
 def seed_initial_data(db=None, rbac_config: Dict = {}):
-    """
-    Reads config.json and populates the database with
-    departments and roles if they don't already exist.
-
-    Raises:
-        ConfigSeedError: If required parameters are missing or file is invalid
-    """
-
     if db is None:
         raise SeederError("Database instance is required")
 

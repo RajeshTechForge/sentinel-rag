@@ -1,3 +1,9 @@
+"""
+This module defines the dependency injection system for the Sentinel RAG API
+using FastAPI.
+
+"""
+
 import asyncpg
 from contextlib import asynccontextmanager
 from typing import Annotated, Optional, Protocol
@@ -11,10 +17,6 @@ from sentinel_rag.services.auth.oidc import (
     get_current_active_user as _get_current_active_user,
 )
 from sentinel_rag.config import AppSettings, get_settings
-
-
-#       PROTOCOLS (INTERFACES)
-# ------------------------------------
 
 
 class IAuditService(Protocol):
@@ -40,8 +42,8 @@ class MockAuditService:
         pass
 
 
-#       APPLICATION STATE
-# ------------------------------------
+# Application State Management
+# ----------------------------
 
 
 class AppState:
@@ -110,7 +112,6 @@ class AppState:
         self._initialized = False
 
 
-# Singleton state instance
 _app_state = AppState()
 
 
@@ -118,16 +119,11 @@ def get_app_state() -> AppState:
     return _app_state
 
 
-#       LIFESPAN CONTEXT MANAGER
-# -------------------------------------
-
-
 @asynccontextmanager
 async def app_lifespan(app):
     settings = get_settings()
     state = get_app_state()
 
-    # Startup
     await state.initialize(settings)
 
     audit_status = "enabled" if settings.audit.enabled else "disabled"
@@ -135,7 +131,6 @@ async def app_lifespan(app):
 
     yield
 
-    # Shutdown
     await state.shutdown()
     print("🛑 Sentinel RAG API shutdown complete")
 

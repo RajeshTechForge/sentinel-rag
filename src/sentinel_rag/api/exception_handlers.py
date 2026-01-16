@@ -1,3 +1,7 @@
+"""
+Exception handlers for the Sentinel RAG API.
+"""
+
 import logging
 import traceback
 from uuid import uuid4
@@ -37,8 +41,6 @@ async def sentinel_exception_handler(
 ) -> JSONResponse:
     """
     Handle all SentinelError exceptions.
-
-    These are our custom business exceptions with structured data.
     """
     request_id = getattr(request.state, "request_id", str(uuid4()))
 
@@ -47,7 +49,7 @@ async def sentinel_exception_handler(
         extra={
             "request_id": request_id,
             "error_code": exc.code,
-            "error_message": exc.message,  # Renamed from 'message' to avoid LogRecord conflict
+            "error_message": exc.message,
             "path": request.url.path,
         },
     )
@@ -67,12 +69,9 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     """
     Handle Pydantic validation errors.
-
-    Transforms validation errors into user-friendly format.
     """
     request_id = getattr(request.state, "request_id", str(uuid4()))
 
-    # Transform validation errors
     errors = []
     for error in exc.errors():
         field = ".".join(str(loc) for loc in error["loc"])
@@ -107,8 +106,6 @@ async def http_exception_handler(
 ) -> JSONResponse:
     """
     Handle standard HTTP exceptions.
-
-    Wraps them in our standard response format.
     """
     request_id = getattr(request.state, "request_id", str(uuid4()))
 
@@ -141,10 +138,6 @@ async def unhandled_exception_handler(
 ) -> JSONResponse:
     """
     Handle all unhandled exceptions.
-
-    - Logs full stack trace
-    - Returns generic error to client (security)
-    - Includes request ID for debugging
     """
     request_id = getattr(request.state, "request_id", str(uuid4()))
     settings = get_settings()
@@ -162,7 +155,6 @@ async def unhandled_exception_handler(
         exc_info=True,
     )
 
-    # In development, include more details
     if settings.debug:
         details = {
             "exception_type": type(exc).__name__,
@@ -184,8 +176,6 @@ async def unhandled_exception_handler(
 def register_exception_handlers(app: FastAPI) -> None:
     """
     Register all exception handlers with the FastAPI app.
-
-    Call this in your app factory.
     """
     app.add_exception_handler(SentinelError, sentinel_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)

@@ -1,3 +1,9 @@
+"""
+OpenID Connect (OIDC) authentication service.
+Handles token creation, verification, and user context extraction.
+
+"""
+
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import Request, HTTPException, status
@@ -9,11 +15,7 @@ from .schemas import TenantConfig, UserContext
 from sentinel_rag.config import AppSettings
 
 
-# --- OAuth Client Registry ---
 oauth = OAuth()
-
-
-# --- JWT Management ---
 
 
 def create_access_token(
@@ -41,7 +43,6 @@ def create_access_token(
         )
     to_encode.update({"exp": expire})
 
-    # Authlib jwt.encode returns bytes, we need string
     encoded_jwt = jwt.encode(
         {"alg": settings.security.algorithm}, to_encode, settings.security.secret_key
     )
@@ -88,19 +89,12 @@ async def get_current_active_user(
     """
     Extract and validate user authentication from request.
 
-    Authentication token resolution priority:
-    1. Authorization header (Bearer token) - for API clients
-    2. Cookie (access_token) - for browser SPAs
-
     Args:
         request: FastAPI request object
         settings: Application settings for token verification
 
     Returns:
         UserContext with authenticated user information
-
-    Raises:
-        HTTPException: If authentication fails
     """
     token = None
 

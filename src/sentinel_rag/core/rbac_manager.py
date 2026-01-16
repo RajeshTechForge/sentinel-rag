@@ -1,3 +1,9 @@
+"""
+Manages role-based access control (RBAC) for users based on their roles and departments.
+Determines which (department, classification) pairs a user can access.
+
+"""
+
 from typing import List, Tuple, Dict
 
 
@@ -6,9 +12,6 @@ class RbacManager:
         self.access_matrix = rbac_config.get("access_matrix", {})
 
     def get_user_access_filters(self, user_id: str, db) -> List[Tuple[str, str]]:
-        """
-        Determines which (department, classification) pairs a user can access.
-        """
         user_perms = db.get_user_role_and_department(user_id)
 
         if not user_perms:

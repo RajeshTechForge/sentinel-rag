@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     embedding vector(1536),
     searchable_text_tsvector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
     
-    -- -- Parent-Document Retrieval fields
+    -- -- For Parent-Document Retrieval fields
     -- parent_chunk_id UUID REFERENCES document_chunks(chunk_id) ON DELETE CASCADE,
     -- is_parent BOOLEAN DEFAULT FALSE,
     -- chunk_type VARCHAR(20) DEFAULT 'child', -- 'parent' or 'child'

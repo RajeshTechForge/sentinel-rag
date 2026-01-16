@@ -1,3 +1,10 @@
+"""
+This module defines the API routes for document uploads.
+
+- Audit logging is integrated.
+
+"""
+
 from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 

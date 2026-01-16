@@ -1,3 +1,9 @@
+"""
+DatabaseManager: Manages PostgreSQL database interactions for user, department, role, and document management,
+including hierarchical document storage and hybrid retrieval using vector and keyword search.
+
+"""
+
 from os import path as os_path
 from typing import List, Optional, Dict
 from dotenv import load_dotenv
@@ -186,7 +192,6 @@ class DatabaseManager:
     def assign_role(self, user_id: str, role_name: str, department_name: str):
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                # Get role_id and department_id
                 cur.execute(
                     """
                     SELECT r.role_id, d.department_id FROM roles r 
@@ -208,8 +213,8 @@ class DatabaseManager:
                 )
             conn.commit()
 
-    #        Document Management
-    # ----------------------------------
+    #      General Document Management
+    # -------------------------------------
     def save_documents(
         self,
         documents: List[Document],
@@ -281,8 +286,8 @@ class DatabaseManager:
         print(f"Saved {len(documents)} document chunks to database.")
         return str(doc_id)
 
-    #     Parent-Document Retrieval Management
-    # -----------------------------------------------
+    #     Parent-Document Document Upload
+    # -------------------------------------------
     def save_hierarchical_documents(
         self,
         parent_chunks: List[Document],
@@ -404,8 +409,8 @@ class DatabaseManager:
         )
         return str(doc_id)
 
-    # HYBRID SEARCH (VECTOR + KEYWORD) WITH RBAC FILTERS
-    # --------------------------------------------------
+    #      Hybrid Documents Retrieval
+    # --------------------------------------
     def search_documents(
         self,
         query_text: str,
@@ -416,13 +421,7 @@ class DatabaseManager:
         rrf_k: int = 60,
         use_parent_retrieval: bool = False,
     ) -> List[Document]:
-        """
-        Search for documents using multi-stage filtering based on RBAC.
-        With parent-document retrieval enabled, returns larger parent chunks
-        instead of matching child chunks for better context.
-        """
         if not filters:
-            # Tip: Log this as a security warning, don't just print it.
             print("No access filters provided. Access denied.")
             return []
 
@@ -437,7 +436,6 @@ class DatabaseManager:
 
         where_sql = " OR ".join(where_clauses)
 
-        # If parent retrieval is enabled, search child chunks but retrieve parent chunks
         if use_parent_retrieval:
             query_sql = f"""
                 WITH vector_search AS (
@@ -501,7 +499,6 @@ class DatabaseManager:
                 + [k]
             )
         else:
-            # Original hybrid search without parent retrieval
             query_sql = f"""
                 WITH vector_search AS (
                     SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY dc.embedding <=> %s::vector) as rank
@@ -559,7 +556,6 @@ class DatabaseManager:
                     rows = cur.fetchall()
 
                     if not rows:
-                        # Tip: Log this event for monitoring purposes
                         return []
 
                     for row in rows:
@@ -580,7 +576,6 @@ class DatabaseManager:
                             Document(page_content=row["content"], metadata=metadata)
                         )
         except Exception as e:
-            # Tip: Proper error handling/logging
             print(f"Database error during retrieval: {e}")
             raise
 

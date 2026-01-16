@@ -1,3 +1,11 @@
+"""
+SentinelEngine core module for document ingestion, processing, and retrieval.
+
+This module defines the SentinelEngine class, which orchestrates the ingestion, chunking, embedding, and storage of documents,
+as well as secure and efficient querying with role-based access control (RBAC) and personally identifiable information (PII) management.
+
+"""
+
 import os
 import tempfile
 import shutil
@@ -53,8 +61,8 @@ class SentinelEngine:
             if isinstance(source, str):
                 doc_content = self.doc_processor.smart_doc_parser(source)
 
+            # Handle UploadFile-like object
             elif hasattr(source, "filename") and hasattr(source, "file"):
-                # Handle UploadFile-like object
                 suffix = os.path.splitext(source.filename)[1]
                 with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                     shutil.copyfileobj(source.file, tmp)
@@ -81,7 +89,6 @@ class SentinelEngine:
 
         # Choose chunking strategy
         if use_hierarchical:
-            # Use Parent-Document Retrieval with hierarchical chunks
             chunk_data = self.doc_processor.create_context_aware_hierarchical_chunks(
                 doc_content
             )
@@ -96,7 +103,6 @@ class SentinelEngine:
                 print("Generating embeddings for child chunks...")
                 text_content = [doc.page_content for doc in child_chunks]
                 embeddings = self.embeddings.embed_documents(text_content)
-                # Ensure embedding is a list of standard floats to avoid numpy types
                 embeddings = [[float(x) for x in emb] for emb in embeddings]
 
             except Exception as e:
@@ -122,7 +128,6 @@ class SentinelEngine:
                     f"Failed to save hierarchical documents to database: {e}"
                 )
         else:
-            # Use traditional flat chunking
             doc_chunks = self.doc_processor.create_context_aware_chunks(doc_content)
             if not doc_chunks:
                 raise DocumentIngestionError("No text chunks created from documents.")
@@ -131,7 +136,6 @@ class SentinelEngine:
                 print("Generating embeddings...")
                 text_content = [doc.page_content for doc in doc_chunks]
                 embeddings = self.embeddings.embed_documents(text_content)
-                # Ensure embedding is a list of standard floats to avoid numpy types
                 embeddings = [[float(x) for x in emb] for emb in embeddings]
 
             except Exception as e:
@@ -159,7 +163,6 @@ class SentinelEngine:
         self,
         question: str,
         user_id: str,
-        k: int = 5,
         use_parent_retrieval: bool = False,
     ):
         try:
@@ -169,13 +172,11 @@ class SentinelEngine:
                 return []
 
             query_embedding = self.embeddings.embed_query(question)
-            # Ensure query_embedding is a list of standard floats
             query_embedding = [float(x) for x in query_embedding]
         except Exception as e:
             raise QueryError(f"Failed to generate query embedding: {e}")
 
         try:
-            # Pass 'question' (text) along with the embedding and parent retrieval flag
             results = self.db.search_documents(
                 question,
                 query_embedding,

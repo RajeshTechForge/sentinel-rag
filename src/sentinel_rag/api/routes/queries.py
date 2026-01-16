@@ -1,3 +1,10 @@
+"""
+This module defines the API routes for querying documents using RAG.
+
+- Audit logging is integrated.
+
+"""
+
 import re
 from datetime import datetime
 from typing import List
@@ -127,7 +134,6 @@ async def query_documents(
         )
         await audit.log_query(log_id, query_entry)
 
-        # Return results
         return [
             DocumentResponse(page_content=doc.page_content, metadata=doc.metadata)
             for doc in results

@@ -1,3 +1,8 @@
+"""
+Middleware and decorators for auditing HTTP requests and data operations.
+
+"""
+
 import time
 from functools import wraps
 from typing import Callable, Optional

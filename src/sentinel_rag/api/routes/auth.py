@@ -1,3 +1,11 @@
+"""
+This module defines the authentication routes for FastAPI.
+
+- Includes endpoints for user login, OIDC callback handling, user registration, and logout.
+- Audit logging is integrated
+
+"""
+
 import secrets
 from datetime import datetime, timezone, timedelta
 from typing import List
@@ -26,7 +34,6 @@ from sentinel_rag.services.audit import (
 )
 
 
-# --- Registration Request Schema ---
 class UserRegistrationRequest(BaseModel):
     """Request model for completing new user registration."""
 
@@ -74,8 +81,6 @@ async def login(request: Request, settings: SettingsDep):
     """
     # Build tenant config from settings
     tenant_config = _build_tenant_config(settings)
-
-    # Validate OIDC configuration before attempting login
     missing_config = []
 
     if not tenant_config.tenant_id:
@@ -110,7 +115,6 @@ async def login(request: Request, settings: SettingsDep):
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Get frontend redirect URI if provided
     frontend_redirect = request.query_params.get("redirect_uri")
 
     if frontend_redirect:
@@ -156,7 +160,6 @@ async def auth_callback(
     creates an access token, sets a secure cookie, and logs the authentication event.
     """
     try:
-        # Verify state parameter
         state_token = request.query_params.get("state")
 
         if not state_token:
@@ -196,8 +199,6 @@ async def auth_callback(
         user = db.get_user_by_email(email)
 
         if not user:
-            # New user detected
-            # create a temporary registration token and redirect to registration
             registration_data = {
                 "email": email,
                 "full_name": full_name,
@@ -223,7 +224,6 @@ async def auth_callback(
                 },
             )
 
-        # Existing user - get their role and department
         user_id = str(user["user_id"])
         role_dept_list = db.get_user_role_and_department(user_id)
 
@@ -296,7 +296,6 @@ async def auth_callback(
         return response
 
     except (HTTPException, Exception) as e:
-        # Error message
         if HTTPException:
             error_msg = f"Authentication failed: {e}"
         else:

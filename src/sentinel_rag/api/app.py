@@ -1,3 +1,7 @@
+"""
+Application factory and FastAPI app initialization for sentinel-rag.
+"""
+
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,45 +16,29 @@ from sentinel_rag.services.audit import AuditLoggingMiddleware
 
 
 def create_application() -> FastAPI:
-    """
-    Application factory function.
-
-    Creates and configures the FastAPI application.
-    All configuration is centralized here.
-
-    Returns:
-        Configured FastAPI application instance
-    """
+    """Creates and configures the FastAPI application instance."""
     settings = get_settings()
 
-    # Configure logging
     log_level = logging.DEBUG if settings.debug else logging.WARNING
     logging.basicConfig(level=log_level)
     logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
 
-    # Create FastAPI app
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
         debug=settings.debug,
         lifespan=app_lifespan,
-        # OpenAPI customization
         docs_url="/docs" if not settings.is_production else None,
         redoc_url="/redoc" if not settings.is_production else None,
         openapi_url="/openapi.json" if not settings.is_production else None,
     )
 
-    #        MIDDLEWARE
-    # ---------------------------
-
-    # Audit logging middleware (first to execute)
     if settings.audit.enabled:
         app.add_middleware(
             AuditLoggingMiddleware,
             audit_service=lambda: get_app_state().audit_service,
         )
 
-    # CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors.allow_origins,
@@ -59,18 +47,12 @@ def create_application() -> FastAPI:
         allow_headers=settings.cors.allow_headers,
     )
 
-    # Session middleware (for OAuth state)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.security.secret_key,
     )
 
-    #      EXCEPTION HANDLERS
-    # ----------------------------
     register_exception_handlers(app)
-
-    #       ROUTES
-    # ----------------------------
 
     app.include_router(health_router_root)
     app.include_router(auth_router_root)
@@ -82,17 +64,6 @@ def create_application() -> FastAPI:
 app = create_application()
 
 
-#    FOR DEVELOPMENT / TESTING
-# ----------------------------------
-
-
 def create_test_application(**overrides) -> FastAPI:
-    """
-    Create application with test configuration.
-
-    Allows overriding settings for testing.
-
-    Usage:
-        app = create_test_application(debug=True, audit_enabled=False)
-    """
+    """Creates an application instance for testing purposes."""
     return create_application()

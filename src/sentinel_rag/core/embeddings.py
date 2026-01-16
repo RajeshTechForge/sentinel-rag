@@ -1,3 +1,10 @@
+"""
+Embedding Factory Module
+
+This module defines a factory class for creating embedding model instances
+based on configuration settings. It supports multiple providers and adheres to
+the 'Open/Closed' principle for easy extensibility."""
+
 import os
 from langchain_core.embeddings import Embeddings
 from langchain_community.embeddings import FakeEmbeddings
@@ -5,11 +12,6 @@ from sentinel_rag.config.config import AppSettings
 
 
 class EmbeddingFactory:
-    """
-    Factory for creating Embedding model instances.
-    Enforces the 'Open/Closed' principle by centralizing model creation.
-    """
-
     @staticmethod
     def get_embedding_model(settings: AppSettings) -> Embeddings:
         provider = settings.embeddings.provider.lower()

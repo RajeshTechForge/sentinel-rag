@@ -15,8 +15,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class DatabaseSettings(BaseSettings):
-    """Database connection settings."""
-
     model_config = SettingsConfigDict(env_prefix="POSTGRES_")
 
     host: str = "localhost"
@@ -33,16 +31,12 @@ class DatabaseSettings(BaseSettings):
 
 
 class DocRetrievalSettings(BaseSettings):
-    """Document Retrieval configuration."""
-
     max_retrieved_docs: int = Field(default=20, ge=1, le=100)
     similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
     rrf_constant: int = Field(default=60, ge=1, le=100)
 
 
 class EmbeddingSettings(BaseSettings):
-    """Embedding Model configuration."""
-
     model_config = SettingsConfigDict(env_prefix="EMBEDDING_")
 
     provider: str = "fake"  # openai, gemini, fake
@@ -51,8 +45,6 @@ class EmbeddingSettings(BaseSettings):
 
 
 class OIDCSettings(BaseSettings):
-    """OIDC/OAuth2 configuration."""
-
     model_config = SettingsConfigDict(env_prefix="OIDC_")
 
     client_id: str = ""
@@ -61,15 +53,11 @@ class OIDCSettings(BaseSettings):
 
 
 class TenantSettings(BaseSettings):
-    """Tenant configuration."""
-
     tenant_id: str = Field(default="", alias="TENANT_ID")
     domain: str = Field(default="", alias="TENANT_DOMAIN")
 
 
 class SecuritySettings(BaseSettings):
-    """Security-related settings."""
-
     model_config = SettingsConfigDict(populate_by_name=True)
 
     secret_key: str = Field(alias="SECRET_KEY")
@@ -85,16 +73,12 @@ class SecuritySettings(BaseSettings):
 
 
 class AuditSettings(BaseSettings):
-    """Audit logging configuration."""
-
     enabled: bool = False
     retention_years: int = Field(default=7, ge=1, le=20)
     async_logging: bool = True
 
 
 class RBACSettings(BaseSettings):
-    """Role-Based Access Control configuration loaded from JSON."""
-
     model_config = SettingsConfigDict(extra="allow")
 
     departments: list[str] = Field(default_factory=list)
@@ -111,8 +95,6 @@ class RBACSettings(BaseSettings):
 
 
 class CORSSettings(BaseSettings):
-    """CORS configuration."""
-
     allow_origins: list[str] = ["*"]
     allow_credentials: bool = True
     allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE"]
@@ -128,11 +110,6 @@ class AppSettings(BaseSettings):
     2. Reads business logic config from JSON file (app metadata, RBAC)
     3. Loads secrets/env-specific config from .env (database, OIDC, security)
 
-    Usage:
-        settings = get_settings()
-        print(settings.app_name)
-        print(settings.database.host)
-        print(settings.rbac.departments)
     """
 
     model_config = SettingsConfigDict(
@@ -152,7 +129,6 @@ class AppSettings(BaseSettings):
     environment: str = "development"
     debug: bool = True
 
-    # Nested settings (from .env)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     doc_retrieval: DocRetrievalSettings = Field(default_factory=DocRetrievalSettings)
     embeddings: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
@@ -166,7 +142,6 @@ class AppSettings(BaseSettings):
     audit: AuditSettings = Field(default_factory=AuditSettings)
     cors: CORSSettings = Field(default_factory=CORSSettings)
 
-    # RBAC settings (from JSON)
     rbac: RBACSettings = Field(default_factory=RBACSettings)
 
     @model_validator(mode="after")
@@ -174,12 +149,7 @@ class AppSettings(BaseSettings):
         """
         Load configuration from JSON file after .env is loaded.
 
-        This validator runs after all fields are initialized, allowing us to:
-        1. Get config_path from .env
-        2. Load JSON file
-        3. Override app-level settings with JSON values
         """
-        # Determine config file path
         config_file = self._resolve_config_path()
 
         # Load JSON configuration
@@ -187,7 +157,6 @@ class AppSettings(BaseSettings):
             with open(config_file, "r", encoding="utf-8") as f:
                 json_config = json.load(f)
 
-            # Map JSON keys to settings (case-insensitive, flexible mapping)
             self.app_name = json_config.get("APP_NAME", self.app_name)
             self.app_version = json_config.get("APP_VERSION", self.app_version)
             self.environment = json_config.get("APP_ENV", self.environment)
@@ -240,7 +209,6 @@ class AppSettings(BaseSettings):
 
     @staticmethod
     def _parse_bool(value) -> bool:
-        """Parse boolean from various formats (str, bool, int)."""
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
@@ -256,10 +224,4 @@ class AppSettings(BaseSettings):
 
 @lru_cache
 def get_settings() -> AppSettings:
-    """
-    Cached settings factory.
-
-    The @lru_cache ensures settings are loaded only once.
-    For testing, use dependency injection override.
-    """
     return AppSettings()

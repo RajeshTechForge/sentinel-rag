@@ -1,3 +1,11 @@
+"""
+API routes for user-related operations, including retrieving user information and
+documents uploaded by the user.
+
+- Audit logging is not implemented for these routes.
+
+"""
+
 from typing import List
 from fastapi import APIRouter, Depends
 
