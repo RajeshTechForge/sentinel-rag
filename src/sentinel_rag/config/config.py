@@ -40,6 +40,16 @@ class DocRetrievalSettings(BaseSettings):
     rrf_constant: int = Field(default=60, ge=1, le=100)
 
 
+class EmbeddingSettings(BaseSettings):
+    """Embedding Model configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="EMBEDDING_")
+
+    provider: str = "fake"  # openai, gemini, fake
+    model_name: str = ""  # Optional, provider defaults used if empty
+    api_key: str = ""
+
+
 class OIDCSettings(BaseSettings):
     """OIDC/OAuth2 configuration."""
 
@@ -145,6 +155,7 @@ class AppSettings(BaseSettings):
     # Nested settings (from .env)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     doc_retrieval: DocRetrievalSettings = Field(default_factory=DocRetrievalSettings)
+    embeddings: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     oidc: OIDCSettings = Field(default_factory=OIDCSettings)
     tenant: TenantSettings = Field(default_factory=TenantSettings)
     security: SecuritySettings = Field(

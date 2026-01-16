@@ -2,7 +2,8 @@ import os
 import tempfile
 import shutil
 from typing import Dict
-from langchain_community.embeddings import FakeEmbeddings
+from sentinel_rag.config.config import get_settings
+from .embeddings import EmbeddingFactory
 
 from .seeder import seed_initial_data
 from .rbac_manager import RbacManager
@@ -27,7 +28,8 @@ class SentinelEngine:
         # self.pii_manager.warm_up()
         self.doc_processor = DocumentProcessor()
 
-        self.embeddings = FakeEmbeddings(size=1536)
+        settings = get_settings()
+        self.embeddings = EmbeddingFactory.get_embedding_model(settings)
         self.max_retrieved_docs = max_retrieved_docs
         self.similarity_threshold = similarity_threshold
         self.rrf_constant = rrf_constant
