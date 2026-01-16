@@ -88,7 +88,7 @@ COPY --from=builder --chown=sentinel:sentinel /app/.venv /app/.venv
 COPY --from=builder --chown=sentinel:sentinel /app/src /app/src
 
 # Copy default configuration
-COPY --chown=sentinel:sentinel src/sentinel_rag/config/default.json /app/config/default.json
+COPY --chown=sentinel:sentinel config/config.json /app/config/default.json
 
 # Switch to non-root user
 USER sentinel

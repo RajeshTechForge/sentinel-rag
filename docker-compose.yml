@@ -56,7 +56,7 @@ services:
       - "8000:8000"
     volumes:
       # Map the Host path (from .env) to the Container path
-      - ${SENTINEL_CONFIG_PATH:-./src/sentinel_rag/config/default.json}:/app/config/runtime_config.json:ro
+      - ${SENTINEL_CONFIG_PATH:-./config/config.json}:/app/config/runtime_config.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
