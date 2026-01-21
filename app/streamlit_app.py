@@ -1,1190 +1,669 @@
-import time
-from datetime import datetime
-from typing import Optional
-from urllib.parse import quote
+"""
+Sentinel RAG - Professional Streamlit Interface
+Enterprise-Grade RAG with Document Management and Intelligent Search
+"""
 
+import os
+import sys
+import tempfile
 import streamlit as st
+from pathlib import Path
 
-from api_client import SentinelRAGClient, APIError, UserInfo
-from styles import (
-    get_custom_css,
-    get_header_html,
-    get_user_profile_html,
-    get_metric_card_html,
-    get_document_card_html,
-    get_result_card_html,
-    get_status_indicator_html,
-    get_alert_html,
-)
+# Add src to path (go up one level from app folder, then into src)
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from sentinel_rag.config.config import get_settings
+from sentinel_rag.services.database.database import DatabaseManager
+from sentinel_rag.core.engine import SentinelEngine
 
 
-# Configuration
-# -------------
-
+# Page configuration
 st.set_page_config(
-    page_title="Sentinel RAG | Enterprise Document Intelligence",
+    page_title="Sentinel RAG",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={
-        "Get Help": "https://github.com/yourusername/sentinel-rag",
-        "Report a bug": "https://github.com/yourusername/sentinel-rag/issues",
-        "About": "# Sentinel RAG\nEnterprise Document Intelligence Platform v1.0.0",
-    },
+)
+
+# Custom CSS for professional styling
+st.markdown(
+    """
+<style>
+    /* Main container styling */
+    .main {
+        padding: 0rem 1rem;
+    }
+    
+    /* Header styling */
+    .header-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .header-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .header-subtitle {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        margin-top: 0.5rem;
+    }
+    
+    /* Card styling */
+    .metric-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        border-left: 4px solid #667eea;
+        margin-bottom: 1rem;
+    }
+    
+    /* Document card styling */
+    .doc-card {
+        background: #f8f9fa;
+        padding: 1.2rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        border-left: 3px solid #667eea;
+        transition: transform 0.2s;
+    }
+    
+    .doc-card:hover {
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Result card styling */
+    .result-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        border-left: 4px solid #48bb78;
+    }
+    
+    /* Button styling */
+    .stButton>button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.5rem 2rem;
+        border-radius: 5px;
+        font-weight: 600;
+        transition: transform 0.2s;
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Sidebar styling */
+    .sidebar .sidebar-content {
+        background: #f8f9fa;
+    }
+    
+    /* Success/Error message styling */
+    .stSuccess, .stError, .stWarning, .stInfo {
+        border-radius: 8px;
+    }
+    
+    /* Hide streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 1rem 2rem;
+        font-weight: 600;
+    }
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
 
-# Session State Initialization
-# ----------------------------
-
-
-def init_session_state():
-    """Initialize all session state variables."""
-    defaults = {
-        "authenticated": False,
-        "token": None,
-        "user": None,
-        "api_url": "http://localhost:8000",
-        "streamlit_url": "http://localhost:8501",
-        "current_page": "dashboard",
-        "query_history": [],
-        "upload_success": None,
-        "last_error": None,
-        "auth_callback_processed": False,
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-
-init_session_state()
-
-
-# API Client
-# ----------
-
-
 @st.cache_resource
-def get_api_client() -> SentinelRAGClient:
-    """Get or create cached API client."""
-    return SentinelRAGClient(base_url=st.session_state.api_url)
-
-
-def get_authenticated_client() -> Optional[SentinelRAGClient]:
-    """Get authenticated API client or None."""
-    if st.session_state.authenticated and st.session_state.token:
-        client = get_api_client()
-        client.set_token(st.session_state.token)
-        return client
-    return None
-
-
-# Authentication Functions
-# ------------------------
-
-
-def handle_login(token: str) -> bool:
-    """
-    Handle user login with JWT token.
-
-    Args:
-        token: JWT access token
-
-    Returns:
-        True if login successful
-    """
-    client = get_api_client()
-    client.set_token(token)
-
+def initialize_system():
+    """Initialize database and engine (cached for performance)"""
     try:
-        user = client.get_current_user()
-        st.session_state.authenticated = True
-        st.session_state.token = token
-        st.session_state.user = user
-        st.session_state.last_error = None
-        return True
-    except APIError as e:
-        st.session_state.last_error = str(e)
-        return False
-
-
-def handle_logout():
-    """Handle user logout."""
-    st.session_state.authenticated = False
-    st.session_state.token = None
-    st.session_state.user = None
-    st.session_state.query_history = []
-    st.cache_resource.clear()
-
-
-# OAuth Callback Handler
-# ----------------------
-
-
-def check_auth_callback():
-    """
-    Check if we're receiving an OAuth callback with access_token.
-    The FastAPI backend redirects here after successful OIDC authentication.
-    """
-    # Check query parameters for token (from callback redirect)
-    query_params = st.query_params
-
-    # Check for access_token in query params (callback from FastAPI)
-    if "access_token" in query_params and not st.session_state.auth_callback_processed:
-        token = query_params.get("access_token")
-        if token and handle_login(token):
-            st.session_state.auth_callback_processed = True
-            # Clear the URL parameters
-            st.query_params.clear()
-            st.rerun()
-
-    # Check for auth error
-    if "auth_error" in query_params:
-        error = query_params.get("auth_error", "Authentication failed")
-        st.session_state.last_error = error
-        st.query_params.clear()
-
-
-# Run callback check on every page load
-check_auth_callback()
-
-
-# UI Components
-# -------------
-
-
-def render_sidebar():
-    """Render the sidebar navigation and user info."""
-    with st.sidebar:
-        # Logo and branding
-        st.markdown(
-            """
-        <div style="padding: 1rem 0; border-bottom: 1px solid #334155; margin-bottom: 1.5rem;">
-            <div style="font-size: 1.75rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem;">
-                🛡️ <span style="background: linear-gradient(135deg, #6366f1, #0ea5e9); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Sentinel</span>
-            </div>
-            <div style="color: #64748b; font-size: 0.85rem; margin-top: 0.25rem;">Enterprise RAG Platform</div>
-        </div>
-        """,
-            unsafe_allow_html=True,
+        settings = get_settings()
+        db = DatabaseManager(settings.database.dsn)
+        engine = SentinelEngine(
+            db=db,
+            rbac_config=settings.rbac.as_dict,
+            max_retrieved_docs=settings.doc_retrieval.max_retrieved_docs,
+            similarity_threshold=settings.doc_retrieval.similarity_threshold,
+            rrf_constant=settings.doc_retrieval.rrf_constant,
         )
-
-        if st.session_state.authenticated and st.session_state.user:
-            user: UserInfo = st.session_state.user
-
-            # User info card
-            st.markdown(
-                f"""
-            <div style="background: linear-gradient(135deg, #1e293b, rgba(99, 102, 241, 0.1)); border: 1px solid #334155; border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <div style="width: 45px; height: 45px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #0ea5e9); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; color: white; font-weight: 600;">
-                        {user.email[0].upper()}
-                    </div>
-                    <div>
-                        <div style="color: #f8fafc; font-weight: 600; font-size: 0.95rem;">{user.email.split("@")[0].replace(".", " ").title()}</div>
-                        <div style="color: #64748b; font-size: 0.75rem;">{user.role} • {user.department}</div>
-                    </div>
-                </div>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
-
-            # Navigation
-            st.markdown("### Navigation")
-
-            nav_items = [
-                ("dashboard", "📊", "Dashboard"),
-                ("query", "🔍", "Query Documents"),
-                ("upload", "📤", "Upload Document"),
-                ("documents", "📁", "My Documents"),
-                ("settings", "⚙️", "Settings"),
-            ]
-
-            for page_id, icon, label in nav_items:
-                is_active = st.session_state.current_page == page_id
-                if st.button(
-                    f"{icon}  {label}",
-                    key=f"nav_{page_id}",
-                    use_container_width=True,
-                    type="primary" if is_active else "secondary",
-                ):
-                    st.session_state.current_page = page_id
-                    st.rerun()
-
-            st.divider()
-
-            # Logout button
-            if st.button("🚪 Logout", use_container_width=True, type="secondary"):
-                handle_logout()
-                st.rerun()
-
-        else:
-            # Not authenticated - show login prompt
-            st.info("Please authenticate to access the platform.")
-
-        # Footer
-        st.markdown(
-            """
-        <div style="position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 230px;">
-            <div style="border-top: 1px solid #334155; padding-top: 1rem; color: #64748b; font-size: 0.75rem; text-align: center;">
-                Sentinel RAG v1.0.0<br>
-                <span style="color: #94a3b8;">Enterprise Edition</span>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
+        return settings, db, engine
+    except Exception as e:
+        st.error(f"⚠️ System initialization failed: {str(e)}")
+        st.stop()
 
 
-def render_login_page():
-    """Render the login/authentication page."""
-    col1, col2, col3 = st.columns([1, 2, 1])
-
-    with col2:
-        st.markdown(get_header_html(), unsafe_allow_html=True)
-
-        # Main login card
-        st.markdown(
-            """
-        <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2.5rem; margin-top: 2rem; text-align: center;">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">🔐</div>
-            <h2 style="color: #f8fafc; margin-bottom: 0.5rem;">Welcome to Sentinel RAG</h2>
-            <p style="color: #94a3b8; margin-bottom: 2rem;">Sign in to access the Enterprise Document Intelligence Platform</p>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        # Show any auth errors
-        if st.session_state.last_error:
-            st.markdown(
-                get_alert_html(st.session_state.last_error, "error"),
-                unsafe_allow_html=True,
-            )
-            st.session_state.last_error = None
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Primary SSO Login Button
-        # Build login URL with redirect back to Streamlit
-        streamlit_callback = st.session_state.streamlit_url
-        login_url = f"{st.session_state.api_url}/auth/login?redirect_uri={quote(streamlit_callback)}"
-        # Create a styled button that redirects to the OIDC login
-        st.markdown(
-            f"""
-        <div style="text-align: center; margin: 1.5rem 0;">
-            <a href="{login_url}" target="_self" style="
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 0.75rem;
-                background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-                color: white;
-                text-decoration: none;
-                padding: 1rem 2.5rem;
-                border-radius: 12px;
-                font-size: 1.1rem;
-                font-weight: 600;
-                box-shadow: 0 4px 15px -3px rgba(99, 102, 241, 0.4);
-                transition: all 0.2s ease;
-            " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px -5px rgba(99, 102, 241, 0.5)';"
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px -3px rgba(99, 102, 241, 0.4)';">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-                    <polyline points="10 17 15 12 10 7"/>
-                    <line x1="15" y1="12" x2="3" y2="12"/>
-                </svg>
-                Sign in with SSO
-            </a>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(
-            """
-        <p style="text-align: center; color: #64748b; font-size: 0.85rem; margin-top: 1rem;">
-            You will be redirected to your organization's identity provider
-        </p>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Divider
-        st.markdown(
-            """
-        <div style="display: flex; align-items: center; margin: 2rem 0;">
-            <div style="flex: 1; height: 1px; background: #334155;"></div>
-            <span style="padding: 0 1rem; color: #64748b; font-size: 0.85rem;">OR</span>
-            <div style="flex: 1; height: 1px; background: #334155;"></div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        # Developer Options (collapsed by default)
-        with st.expander("🔧 Developer Options", expanded=False):
-            st.markdown(
-                """
-            <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1rem;">
-                For developers and testing: manually enter a JWT access token
-            </p>
-            """,
-                unsafe_allow_html=True,
-            )
-
-            # API URL Configuration
-            col_dev1, col_dev2 = st.columns(2)
-
-            with col_dev1:
-                api_url = st.text_input(
-                    "API Base URL",
-                    value=st.session_state.api_url,
-                    help="The base URL of the Sentinel RAG API server",
-                )
-                if api_url != st.session_state.api_url:
-                    st.session_state.api_url = api_url
-                    st.cache_resource.clear()
-
-            with col_dev2:
-                streamlit_url = st.text_input(
-                    "Streamlit Callback URL",
-                    value=st.session_state.streamlit_url,
-                    help="The URL where Streamlit is running (for OAuth callback)",
-                )
-                if streamlit_url != st.session_state.streamlit_url:
-                    st.session_state.streamlit_url = streamlit_url
-
-            # Token input
-            token = st.text_area(
-                "Access Token (JWT)",
-                height=100,
-                placeholder="Paste your JWT access token here...",
-                help="Obtain your token from the /auth/callback endpoint or your administrator",
-            )
-
-            if st.button("🔑 Connect with Token", use_container_width=True):
-                if token.strip():
-                    with st.spinner("Authenticating..."):
-                        if handle_login(token.strip()):
-                            st.success("✅ Authentication successful!")
-                            time.sleep(0.5)
-                            st.rerun()
-                        else:
-                            st.error(
-                                f"❌ Authentication failed: {st.session_state.last_error}"
-                            )
-                else:
-                    st.warning("⚠️ Please enter a valid token")
-
-        # Health check section
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("---")
-
-        col_a, col_b = st.columns([1, 1])
-
-        with col_a:
-            st.markdown("### 🏥 API Status")
-            try:
-                client = get_api_client()
-                health = client.health_check()
-                st.markdown(
-                    f"""
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
-                    <span style="color: #10b981; font-weight: 500;">Connected</span>
-                    <span style="color: #64748b; font-size: 0.85rem;">v{health.version}</span>
-                </div>
-                """,
-                    unsafe_allow_html=True,
-                )
-            except Exception:
-                st.markdown(
-                    """
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
-                    <span style="color: #ef4444; font-weight: 500;">Disconnected</span>
-                </div>
-                """,
-                    unsafe_allow_html=True,
-                )
-
-        with col_b:
-            if st.button("🔄 Check Connection", use_container_width=True):
-                try:
-                    client = get_api_client()
-                    health = client.health_check()
-                    st.success(f"✅ API is healthy (v{health.version})")
-                except APIError as e:
-                    st.error(f"❌ API Error: {e.message}")
-                except Exception as e:
-                    st.error(f"❌ Connection Error: {str(e)}")
-
-        # Help section
-        st.markdown(
-            """
-        <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px;">
-            <h4 style="color: #f8fafc; margin-bottom: 0.75rem;">💡 Need Help?</h4>
-            <div style="color: #94a3b8; font-size: 0.9rem;">
-                <p style="margin-bottom: 0.5rem;"><strong>First time user?</strong> Click "Sign in with SSO" to authenticate with your organization's identity provider.</p>
-                <p style="margin-bottom: 0;"><strong>Having issues?</strong> Ensure the FastAPI server is running and OIDC is properly configured.</p>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-
-def render_dashboard():
-    """Render the main dashboard page."""
-    st.markdown(
-        get_header_html("Dashboard", "Welcome back! Here's your activity overview"),
-        unsafe_allow_html=True,
-    )
-
-    client = get_authenticated_client()
-    user: UserInfo = st.session_state.user
-
-    # User profile section
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        st.markdown(
-            get_user_profile_html(user.email, user.role, user.department),
-            unsafe_allow_html=True,
-        )
-
-        # Quick actions
-        st.markdown(
-            """
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">⚡</span>
-                <h3 class="card-title">Quick Actions</h3>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        if st.button("🔍 New Query", use_container_width=True, type="primary"):
-            st.session_state.current_page = "query"
-            st.rerun()
-
-        if st.button("📤 Upload Document", use_container_width=True):
-            st.session_state.current_page = "upload"
-            st.rerun()
-
-        if st.button("📁 View My Documents", use_container_width=True):
-            st.session_state.current_page = "documents"
-            st.rerun()
-
-    with col2:
-        # Metrics row
-        st.markdown("### 📊 Your Statistics")
-
-        try:
-            documents = client.get_user_documents()
-            doc_count = len(documents)
-        except APIError:
-            documents = []
-            doc_count = 0
-
-        query_count = len(st.session_state.query_history)
-
-        metric_cols = st.columns(4)
-
-        with metric_cols[0]:
-            st.markdown(
-                get_metric_card_html(str(doc_count), "Documents", "📄"),
-                unsafe_allow_html=True,
-            )
-
-        with metric_cols[1]:
-            st.markdown(
-                get_metric_card_html(str(query_count), "Queries Today", "🔍"),
-                unsafe_allow_html=True,
-            )
-
-        with metric_cols[2]:
-            # Calculate unique departments from documents
-            unique_depts = (
-                len(set(doc.department for doc in documents)) if documents else 0
-            )
-            st.markdown(
-                get_metric_card_html(str(unique_depts), "Departments", "🏢"),
-                unsafe_allow_html=True,
-            )
-
-        with metric_cols[3]:
-            st.markdown(
-                get_metric_card_html(user.role.upper(), "Access Level", "🔐"),
-                unsafe_allow_html=True,
-            )
-
-        # Recent documents
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("### 📁 Recent Documents")
-
-        if documents:
-            for doc in documents[:5]:  # Show last 5
-                st.markdown(
-                    get_document_card_html(
-                        title=doc.title,
-                        doc_id=doc.doc_id,
-                        classification=doc.classification,
-                        department=doc.department,
-                        created_at=doc.created_at,
-                    ),
-                    unsafe_allow_html=True,
-                )
-
-            if len(documents) > 5:
-                st.markdown(
-                    f"""
-                <div style="text-align: center; padding: 1rem; color: #64748b;">
-                    <em>+ {len(documents) - 5} more documents</em>
-                </div>
-                """,
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.markdown(
-                get_alert_html(
-                    "No documents found. Upload your first document to get started!",
-                    "info",
-                ),
-                unsafe_allow_html=True,
-            )
-
-    # System status section
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("### 🏥 System Status")
-
-    try:
-        health = client.readiness_check()
-        status_cols = st.columns(4)
-
-        with status_cols[0]:
-            st.markdown(
-                f"""
-            <div class="card" style="text-align: center;">
-                {get_status_indicator_html(health.status, "Overall Status")}
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
-
-        if health.components:
-            for i, (name, details) in enumerate(health.components.items()):
-                if i < 3:  # Show up to 3 components
-                    with status_cols[i + 1]:
-                        st.markdown(
-                            f"""
-                        <div class="card" style="text-align: center;">
-                            {get_status_indicator_html(details.get("status", "unknown"), name.title())}
-                        </div>
-                        """,
-                            unsafe_allow_html=True,
-                        )
-
-    except APIError as e:
-        st.markdown(
-            get_alert_html(f"Unable to fetch system status: {e.message}", "warning"),
-            unsafe_allow_html=True,
-        )
-
-
-def render_query_page():
-    """Render the document query page."""
-    st.markdown(
-        get_header_html(
-            "Query Documents", "Semantic search across your authorized documents"
-        ),
-        unsafe_allow_html=True,
-    )
-
-    client = get_authenticated_client()
-
-    # Query input section
+def render_header():
+    """Render professional header"""
     st.markdown(
         """
-    <div class="card">
-        <div class="card-header">
-            <span class="card-icon">🔍</span>
-            <h3 class="card-title">Enter Your Query</h3>
-        </div>
+    <div class="header-container">
+        <h1 class="header-title">🛡️ Sentinel RAG</h1>
+        <p class="header-subtitle">Enterprise-Grade RAG with Intelligent Document Management & Semantic Search</p>
     </div>
     """,
         unsafe_allow_html=True,
     )
 
-    col1, col2 = st.columns([3, 1])
 
-    with col1:
-        query_text = st.text_area(
-            "Search Query",
-            placeholder="Enter your question or search terms...\n\nExample: What are the security policies for handling customer data?",
-            height=120,
-            label_visibility="collapsed",
+def render_sidebar(settings):
+    """Render sidebar with user selection and stats"""
+    with st.sidebar:
+        st.markdown("### 👤 User Profile")
+
+        # Get all users from database
+        _, db, _ = initialize_system()
+
+        try:
+            with db._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT u.user_id, u.email, u.full_name,
+                               STRING_AGG(DISTINCT d.department_name, ', ') as departments,
+                               STRING_AGG(DISTINCT r.role_name, ', ') as roles
+                        FROM users u
+                        LEFT JOIN user_access ua ON u.user_id = ua.user_id
+                        LEFT JOIN departments d ON ua.department_id = d.department_id
+                        LEFT JOIN roles r ON ua.role_id = r.role_id
+                        GROUP BY u.user_id, u.email, u.full_name
+                        ORDER BY u.email
+                    """)
+                    users = cur.fetchall()
+        except Exception as e:
+            st.error(f"Error loading users: {e}")
+            users = []
+
+        if not users:
+            st.warning("No users found in the system")
+            return None
+
+        # Create user selection dropdown
+        user_options = {f"{u[1]} ({u[2] or 'No name'})": u[0] for u in users}
+        selected_user_display = st.selectbox(
+            "Select User",
+            options=list(user_options.keys()),
+            help="Choose a user to perform operations",
         )
 
-    with col2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        k = st.slider(
-            "Results Count",
-            min_value=1,
-            max_value=20,
-            value=5,
-            help="Number of document chunks to retrieve",
-        )
+        selected_user_id = user_options[selected_user_display]
 
-        search_button = st.button("🚀 Search", use_container_width=True, type="primary")
+        # Display user info
+        selected_user = next(u for u in users if u[0] == selected_user_id)
 
-    # Execute query
-    if search_button and query_text.strip():
-        with st.spinner("🔍 Searching documents..."):
-            start_time = time.time()
+        st.markdown("---")
+        st.markdown("**User Details:**")
+        st.markdown(f"**Email:** {selected_user[1]}")
+        st.markdown(f"**Name:** {selected_user[2] or 'Not set'}")
+        st.markdown(f"**Departments:** {selected_user[3] or 'None'}")
+        st.markdown(f"**Roles:** {selected_user[4] or 'None'}")
 
-            try:
-                results = client.query(query_text.strip(), k=k)
-                elapsed_time = (time.time() - start_time) * 1000
+        st.markdown("---")
+        st.markdown("### ⚙️ System Configuration")
+        st.markdown(f"**Environment:** {settings.environment}")
+        st.markdown(f"**Embedding:** {settings.embeddings.provider}")
+        st.markdown(f"**Max Results:** {settings.doc_retrieval.max_retrieved_docs}")
+        st.markdown(f"**Similarity:** {settings.doc_retrieval.similarity_threshold}")
 
-                # Store in history
-                st.session_state.query_history.append(
-                    {
-                        "query": query_text,
-                        "results_count": len(results),
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
+        st.markdown("---")
+        st.markdown("### 📊 Quick Stats")
 
-                # Display results
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown(
-                    f"""
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="color: #f8fafc; margin: 0;">📋 Search Results</h3>
-                    <div style="color: #64748b; font-size: 0.9rem;">
-                        Found {len(results)} results in {elapsed_time:.0f}ms
-                    </div>
-                </div>
-                """,
-                    unsafe_allow_html=True,
-                )
+        try:
+            with db._get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Total documents
+                    cur.execute("SELECT COUNT(*) FROM documents")
+                    total_docs = cur.fetchone()[0]
 
-                if results:
-                    for i, result in enumerate(results, 1):
-                        with st.expander(
-                            f"📄 Result {i} — {result.title or 'Untitled'}",
-                            expanded=i <= 3,
-                        ):
-                            st.markdown(
-                                get_result_card_html(
-                                    content=result.content,
-                                    doc_title=result.title,
-                                    classification=result.classification,
-                                    chunk_id=result.chunk_id,
-                                ),
-                                unsafe_allow_html=True,
-                            )
+                    # Total chunks
+                    cur.execute("SELECT COUNT(*) FROM document_chunks")
+                    total_chunks = cur.fetchone()[0]
 
-                            # Metadata details
-                            st.markdown("**Metadata:**")
-                            st.json(result.metadata)
-                else:
-                    st.markdown(
-                        get_alert_html(
-                            "No results found. Try a different query or check your access permissions.",
-                            "info",
-                        ),
-                        unsafe_allow_html=True,
+                    # User's documents
+                    cur.execute(
+                        "SELECT COUNT(*) FROM documents WHERE uploaded_by = %s",
+                        (selected_user_id,),
                     )
+                    user_docs = cur.fetchone()[0]
 
-            except APIError as e:
-                st.markdown(
-                    get_alert_html(f"Query failed: {e.message}", "error"),
-                    unsafe_allow_html=True,
-                )
+            st.metric("Total Documents", total_docs)
+            st.metric("Total Chunks", total_chunks)
+            st.metric("Your Documents", user_docs)
 
-    elif search_button:
-        st.warning("⚠️ Please enter a search query")
+        except Exception as e:
+            st.error(f"Error loading stats: {e}")
 
-    # Query history section
-    if st.session_state.query_history:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("### 📜 Recent Queries")
-
-        history_df_data = []
-        for item in reversed(st.session_state.query_history[-10:]):
-            history_df_data.append(
-                {
-                    "Query": item["query"][:50]
-                    + ("..." if len(item["query"]) > 50 else ""),
-                    "Results": item["results_count"],
-                    "Time": item["timestamp"].split("T")[1].split(".")[0],
-                }
-            )
-
-        st.dataframe(
-            history_df_data,
-            use_container_width=True,
-            hide_index=True,
-        )
+        return selected_user_id
 
 
-def render_upload_page():
-    """Render the document upload page."""
+def render_upload_tab(user_id: str, engine: SentinelEngine, settings):
+    """Render document upload interface"""
+    st.markdown("## 📤 Upload Documents")
     st.markdown(
-        get_header_html("Upload Document", "Add new documents to the knowledge base"),
-        unsafe_allow_html=True,
+        "Upload documents to the knowledge base with metadata and access controls."
     )
-
-    client = get_authenticated_client()
-    user: UserInfo = st.session_state.user
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.markdown(
-            """
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">📤</span>
-                <h3 class="card-title">Document Upload</h3>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        # File uploader
         uploaded_file = st.file_uploader(
             "Choose a file",
-            type=["pdf", "txt", "md", "doc", "docx"],
-            help="Supported formats: PDF, TXT, MD, DOC, DOCX",
+            type=["pdf", "docx", "txt", "md", "html", "xlsx", "pptx"],
+            help="Supported formats: PDF, DOCX, TXT, MD, HTML, XLSX, PPTX",
         )
 
-        if uploaded_file:
-            st.markdown(
-                f"""
-            <div class="alert alert-info">
-                <span>📎</span>
-                <div>
-                    <strong>File selected:</strong> {uploaded_file.name}<br>
-                    <span style="font-size: 0.85rem;">Size: {uploaded_file.size / 1024:.1f} KB | Type: {uploaded_file.type}</span>
-                </div>
-            </div>
-            """,
-                unsafe_allow_html=True,
+    with col2:
+        use_hierarchical = st.checkbox(
+            "Use Hierarchical Chunking",
+            value=False,
+            help="Enable parent-document retrieval for better context",
+        )
+
+    if uploaded_file:
+        st.markdown("### 📋 Document Metadata")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            doc_title = st.text_input(
+                "Document Title*",
+                value=uploaded_file.name,
+                help="Descriptive title for the document",
             )
 
-        # Document metadata form
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("#### Document Details")
-
-        doc_title = st.text_input(
-            "Document Title*",
-            placeholder="Enter a descriptive title for the document",
-        )
-
-        doc_description = st.text_area(
-            "Description*",
-            placeholder="Provide a brief description of the document content...",
-            height=100,
-        )
-
-        col_a, col_b = st.columns(2)
-
-        with col_a:
             doc_department = st.selectbox(
                 "Department*",
-                options=client.get_department_options(),
-                format_func=lambda x: x.replace("_", " ").title(),
+                options=settings.rbac.departments,
+                help="Department that owns this document",
             )
 
-        with col_b:
+        with col2:
+            doc_description = st.text_area(
+                "Description*",
+                help="Brief description of the document content",
+                height=100,
+            )
+
             doc_classification = st.selectbox(
                 "Classification Level*",
-                options=client.get_classification_options(),
-                format_func=lambda x: x.title(),
+                options=["public", "internal", "confidential"],
+                help="Access level for this document",
             )
 
-        # Classification info
-        classification_info = {
-            "public": ("🟢", "Accessible to all users within the organization"),
-            "internal": ("🔵", "Accessible to employees within specific departments"),
-            "confidential": (
-                "🟡",
-                "Restricted access, requires explicit authorization",
-            ),
-            "restricted": ("🔴", "Highly sensitive, strict access controls apply"),
-        }
+        st.markdown("---")
 
-        icon, desc = classification_info.get(doc_classification, ("", ""))
-        st.markdown(
-            f"""
-        <div style="padding: 0.75rem; background: rgba(99, 102, 241, 0.05); border-radius: 8px; margin-top: 0.5rem;">
-            <span style="font-size: 1.25rem;">{icon}</span>
-            <span style="color: #94a3b8; font-size: 0.9rem; margin-left: 0.5rem;">{desc}</span>
-        </div>
-        """,
-            unsafe_allow_html=True,
+        if st.button(
+            "🚀 Upload & Process Document", type="primary", use_container_width=True
+        ):
+            if not doc_title or not doc_description:
+                st.error("❌ Please fill in all required fields (marked with *)")
+                return
+
+            with st.spinner("Processing document... This may take a moment."):
+                try:
+                    # Get database instance
+                    _, db, _ = initialize_system()
+
+                    # Convert department name to department_id
+                    dept_id = db.get_department_id_by_name(doc_department)
+                    if not dept_id:
+                        st.error(
+                            f"❌ Department '{doc_department}' not found in database"
+                        )
+                        return
+
+                    # Create a temporary file
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=Path(uploaded_file.name).suffix
+                    ) as tmp:
+                        tmp.write(uploaded_file.getvalue())
+                        tmp_path = tmp.name
+
+                    # Process document
+                    doc_id = engine.ingest_documents(
+                        source=tmp_path,
+                        title=doc_title,
+                        description=doc_description,
+                        user_id=user_id,
+                        department_id=dept_id,  # Use UUID instead of name
+                        classification=doc_classification,
+                        use_hierarchical=use_hierarchical,
+                    )
+
+                    # Clean up
+                    os.unlink(tmp_path)
+
+                    st.success(
+                        f"✅ Document successfully uploaded! Document ID: `{doc_id}`"
+                    )
+                    st.balloons()
+
+                except Exception as e:
+                    st.error(f"❌ Upload failed: {str(e)}")
+                    if "tmp_path" in locals() and os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+
+
+def render_search_tab(user_id: str, engine: SentinelEngine):
+    """Render intelligent search interface"""
+    st.markdown("## 🔍 Intelligent Search")
+    st.markdown(
+        "Search across documents you have access to with semantic understanding."
+    )
+
+    col1, col2 = st.columns([4, 1])
+
+    with col1:
+        query = st.text_input(
+            "Enter your question",
+            placeholder="e.g., What are the company's remote work policies?",
+            label_visibility="collapsed",
         )
 
-        # Upload button
-        st.markdown("<br>", unsafe_allow_html=True)
+    with col2:
+        use_parent = st.checkbox(
+            "Parent Retrieval",
+            value=False,
+            help="Use parent document retrieval for better context",
+        )
 
-        if st.button("📤 Upload Document", use_container_width=True, type="primary"):
-            # Validation
-            if not uploaded_file:
-                st.error("❌ Please select a file to upload")
-            elif not doc_title.strip():
-                st.error("❌ Please enter a document title")
-            elif not doc_description.strip():
-                st.error("❌ Please enter a document description")
-            else:
-                with st.spinner("📤 Uploading and processing document..."):
-                    try:
-                        result = client.upload_document(
-                            file=uploaded_file.getvalue(),
-                            filename=uploaded_file.name,
-                            title=doc_title.strip(),
-                            description=doc_description.strip(),
-                            department=doc_department,
-                            classification=doc_classification,
-                        )
+    if st.button("🔎 Search", type="primary", use_container_width=True) or (
+        query and len(query) > 3
+    ):
+        if not query or len(query) < 3:
+            st.warning("⚠️ Please enter a query with at least 3 characters")
+            return
 
-                        st.session_state.upload_success = result
+        with st.spinner("Searching knowledge base..."):
+            try:
+                results = engine.query(
+                    question=query, user_id=user_id, use_parent_retrieval=use_parent
+                )
 
+                if not results:
+                    st.info(
+                        "ℹ️ No results found. Try a different query or check your access permissions."
+                    )
+                    return
+
+                st.markdown(f"### 📚 Found {len(results)} relevant results")
+
+                for idx, doc in enumerate(results, 1):
+                    with st.container():
                         st.markdown(
                             f"""
-                        <div class="alert alert-success">
-                            <span>✅</span>
-                            <div>
-                                <strong>Document uploaded successfully!</strong><br>
-                                <span style="font-size: 0.85rem;">
-                                    Document ID: <code>{result.doc_id}</code><br>
-                                    Processing time: {result.processing_time_ms:.0f}ms
-                                </span>
-                            </div>
+                        <div class="result-card">
+                            <h4>📄 Result {idx}: {doc.metadata.get("title", "Untitled")}</h4>
                         </div>
                         """,
                             unsafe_allow_html=True,
                         )
 
-                        st.balloons()
+                        # Create columns for metadata and content
+                        meta_col, content_col = st.columns([1, 2])
 
-                    except APIError as e:
-                        st.markdown(
-                            get_alert_html(f"Upload failed: {e.message}", "error"),
-                            unsafe_allow_html=True,
-                        )
+                        with meta_col:
+                            st.markdown("**Metadata:**")
+                            st.markdown(
+                                f"- **Department:** {doc.metadata.get('department_id', 'N/A')}"
+                            )
+                            st.markdown(
+                                f"- **Classification:** {doc.metadata.get('classification', 'N/A')}"
+                            )
+                            st.markdown(
+                                f"- **Similarity:** {doc.metadata.get('similarity_score', 0):.2%}"
+                            )
 
-    with col2:
-        # Upload guidelines
-        st.markdown(
-            """
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">📋</span>
-                <h3 class="card-title">Upload Guidelines</h3>
-            </div>
-            <div style="color: #94a3b8; font-size: 0.9rem;">
-                <ul style="padding-left: 1.25rem; margin: 0;">
-                    <li style="margin-bottom: 0.5rem;">Ensure documents are properly classified</li>
-                    <li style="margin-bottom: 0.5rem;">Use descriptive titles for easy discovery</li>
-                    <li style="margin-bottom: 0.5rem;">Max file size: 10MB</li>
-                    <li style="margin-bottom: 0.5rem;">Documents are automatically chunked and indexed</li>
-                    <li style="margin-bottom: 0.5rem;">PII is automatically detected and protected</li>
-                </ul>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
+                            if "chunk_id" in doc.metadata:
+                                st.markdown(
+                                    f"- **Chunk ID:** `{doc.metadata['chunk_id']}`"
+                                )
+                            if "parent_chunk_id" in doc.metadata:
+                                st.markdown(
+                                    f"- **Parent ID:** `{doc.metadata['parent_chunk_id']}`"
+                                )
 
-        st.markdown("<br>", unsafe_allow_html=True)
+                        with content_col:
+                            st.markdown("**Content:**")
+                            st.markdown(f"```\n{doc.page_content}\n```")
 
-        # Current user context
-        st.markdown(
-            f"""
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">👤</span>
-                <h3 class="card-title">Upload Context</h3>
-            </div>
-            <div style="color: #94a3b8; font-size: 0.9rem;">
-                <p><strong>Uploading as:</strong> {user.email}</p>
-                <p><strong>Role:</strong> {user.role}</p>
-                <p><strong>Department:</strong> {user.department}</p>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
+                        st.markdown("---")
+
+            except Exception as e:
+                st.error(f"❌ Search failed: {str(e)}")
 
 
-def render_documents_page():
-    """Render the documents list page."""
-    st.markdown(
-        get_header_html("My Documents", "View and manage your uploaded documents"),
-        unsafe_allow_html=True,
-    )
+def render_documents_tab(user_id: str, db: DatabaseManager):
+    """Render document management interface"""
+    st.markdown("## 📚 Document Library")
+    st.markdown("View and manage your uploaded documents.")
 
-    client = get_authenticated_client()
-
-    # Filters
-    col1, col2, col3 = st.columns([2, 1, 1])
-
-    with col1:
-        search_filter = st.text_input(
-            "🔍 Search documents",
-            placeholder="Filter by title...",
-            label_visibility="collapsed",
-        )
-
-    with col2:
-        classification_filter = st.selectbox(
-            "Classification",
-            options=["All"] + [c.title() for c in client.get_classification_options()],
-            label_visibility="collapsed",
-        )
-
-    with col3:
-        department_filter = st.selectbox(
-            "Department",
-            options=["All"]
-            + [d.replace("_", " ").title() for d in client.get_department_options()],
-            label_visibility="collapsed",
-        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Fetch and display documents
     try:
-        with st.spinner("Loading documents..."):
-            documents = client.get_user_documents()
+        docs = db.get_document_uploads_by_user(user_id)
 
-        # Apply filters
-        filtered_docs = documents
+        if not docs:
+            st.info(
+                "ℹ️ You haven't uploaded any documents yet. Go to the Upload tab to add documents."
+            )
+            return
 
+        st.markdown(f"### You have uploaded **{len(docs)}** document(s)")
+
+        # Create search filter
+        search_filter = st.text_input(
+            "🔍 Filter documents", placeholder="Search by title or description..."
+        )
+
+        filtered_docs = docs
         if search_filter:
             filtered_docs = [
-                d for d in filtered_docs if search_filter.lower() in d.title.lower()
-            ]
-
-        if classification_filter != "All":
-            filtered_docs = [
                 d
-                for d in filtered_docs
-                if d.classification.lower() == classification_filter.lower()
+                for d in docs
+                if search_filter.lower() in d["title"].lower()
+                or search_filter.lower() in (d["description"] or "").lower()
             ]
 
-        if department_filter != "All":
-            dept_value = department_filter.lower().replace(" ", "_")
-            filtered_docs = [
-                d for d in filtered_docs if d.department.lower() == dept_value
-            ]
+        for doc in filtered_docs:
+            with st.container():
+                col1, col2, col3 = st.columns([3, 1, 1])
 
-        # Stats
-        st.markdown(
-            f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <span style="color: #f8fafc; font-size: 1.1rem;">📁 Showing {len(filtered_docs)} of {len(documents)} documents</span>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        if filtered_docs:
-            # Display as grid
-            cols = st.columns(2)
-
-            for i, doc in enumerate(filtered_docs):
-                with cols[i % 2]:
+                with col1:
                     st.markdown(
-                        get_document_card_html(
-                            title=doc.title,
-                            doc_id=doc.doc_id,
-                            classification=doc.classification,
-                            department=doc.department,
-                            created_at=doc.created_at,
-                        ),
+                        f"""
+                    <div class="doc-card">
+                        <h4>📄 {doc["title"]}</h4>
+                        <p style="color: #666; margin: 0.5rem 0;">{doc["description"] or "No description"}</p>
+                        <small style="color: #999;">Uploaded: {doc["created_at"].strftime("%Y-%m-%d %H:%M")}</small>
+                    </div>
+                    """,
                         unsafe_allow_html=True,
                     )
 
+                with col2:
+                    st.markdown("**Department:**")
+                    st.markdown(doc["department_name"])
+
+                with col3:
+                    classification_colors = {
+                        "public": "🟢",
+                        "internal": "🟡",
+                        "confidential": "🔴",
+                    }
+                    st.markdown("**Classification:**")
+                    st.markdown(
+                        f"{classification_colors.get(doc['classification'], '⚪')} {doc['classification']}"
+                    )
+
+                # Get chunk count for this document
+                with db._get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT COUNT(*) FROM document_chunks WHERE doc_id = %s",
+                            (doc["doc_id"],),
+                        )
+                        chunk_count = cur.fetchone()[0]
+
+                st.markdown(f"*Contains {chunk_count} chunks*")
+                st.markdown("---")
+
+    except Exception as e:
+        st.error(f"❌ Error loading documents: {str(e)}")
+
+
+def render_analytics_tab(db: DatabaseManager):
+    """Render analytics dashboard"""
+    st.markdown("## 📊 Analytics Dashboard")
+    st.markdown("System-wide statistics and insights.")
+
+    try:
+        with db._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Get various statistics
+                cur.execute("""
+                    SELECT 
+                        COUNT(DISTINCT doc_id) as total_docs,
+                        COUNT(*) as total_chunks,
+                        AVG(LENGTH(content)) as avg_chunk_size
+                    FROM document_chunks
+                """)
+                stats = cur.fetchone()
+
+                cur.execute("SELECT COUNT(*) FROM users")
+                total_users = cur.fetchone()[0]
+
+                cur.execute("SELECT COUNT(DISTINCT department_id) FROM documents")
+                active_departments = cur.fetchone()[0]
+
+        # Display metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("📚 Total Documents", stats[0] if stats else 0)
+
+        with col2:
+            st.metric("📝 Total Chunks", stats[1] if stats else 0)
+
+        with col3:
+            st.metric("👥 Total Users", total_users)
+
+        with col4:
+            st.metric("🏢 Active Departments", active_departments)
+
+        st.markdown("---")
+
+        # Document distribution by classification
+        with db._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT classification, COUNT(*) as count
+                    FROM documents
+                    GROUP BY classification
+                    ORDER BY count DESC
+                """)
+                classification_data = cur.fetchall()
+
+        if classification_data:
+            st.markdown("### 📊 Documents by Classification")
+
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                for classification, count in classification_data:
+                    percentage = (
+                        (count / stats[0] * 100) if stats and stats[0] > 0 else 0
+                    )
+                    st.progress(
+                        percentage / 100,
+                        f"{classification.upper()}: {count} documents ({percentage:.1f}%)",
+                    )
+
+            with col2:
+                for classification, count in classification_data:
+                    st.markdown(f"**{classification}:** {count}")
+
+        # Recent uploads
+        st.markdown("### 📅 Recent Uploads")
+        with db._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT d.title, d.created_at, u.email, dept.department_name, d.classification
+                    FROM documents d
+                    JOIN users u ON d.uploaded_by = u.user_id
+                    JOIN departments dept ON d.department_id = dept.department_id
+                    ORDER BY d.created_at DESC
+                    LIMIT 10
+                """)
+                recent_docs = cur.fetchall()
+
+        if recent_docs:
+            for doc in recent_docs:
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    st.markdown(f"**{doc[0]}**")
+                with col2:
+                    st.markdown(f"*{doc[2]}*")
+                with col3:
+                    st.markdown(f"_{doc[1].strftime('%Y-%m-%d %H:%M')}_")
         else:
-            st.markdown(
-                get_alert_html("No documents match your filters.", "info"),
-                unsafe_allow_html=True,
-            )
+            st.info("No recent uploads")
 
-    except APIError as e:
-        st.markdown(
-            get_alert_html(f"Failed to load documents: {e.message}", "error"),
-            unsafe_allow_html=True,
-        )
-
-
-def render_settings_page():
-    """Render the settings page."""
-    st.markdown(
-        get_header_html(
-            "Settings", "Configure your preferences and view system information"
-        ),
-        unsafe_allow_html=True,
-    )
-
-    client = get_authenticated_client()
-    user: UserInfo = st.session_state.user
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown(
-            """
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">👤</span>
-                <h3 class="card-title">Account Information</h3>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(f"""
-        | Property | Value |
-        |----------|-------|
-        | **User ID** | `{user.user_id}` |
-        | **Email** | {user.email} |
-        | **Role** | {user.role} |
-        | **Department** | {user.department} |
-        """)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown(
-            """
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">🔗</span>
-                <h3 class="card-title">API Configuration</h3>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        new_api_url = st.text_input(
-            "API Base URL",
-            value=st.session_state.api_url,
-        )
-
-        if new_api_url != st.session_state.api_url:
-            if st.button("Update API URL"):
-                st.session_state.api_url = new_api_url
-                st.cache_resource.clear()
-                st.success("✅ API URL updated")
-                st.rerun()
-
-    with col2:
-        st.markdown(
-            """
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">🏥</span>
-                <h3 class="card-title">System Health</h3>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        try:
-            health = client.readiness_check()
-
-            st.markdown(
-                f"**Overall Status:** {get_status_indicator_html(health.status, health.status.title())}",
-                unsafe_allow_html=True,
-            )
-            st.markdown(f"**Version:** {health.version}")
-            st.markdown(f"**Environment:** {health.environment}")
-            st.markdown(
-                f"**Audit Logging:** {'Enabled' if health.audit_enabled else 'Disabled'}"
-            )
-
-            if health.components:
-                st.markdown("<br>**Components:**", unsafe_allow_html=True)
-                for name, details in health.components.items():
-                    status = details.get("status", "unknown")
-                    st.markdown(
-                        get_status_indicator_html(status, f"{name.title()}: {status}"),
-                        unsafe_allow_html=True,
-                    )
-
-        except APIError as e:
-            st.error(f"Failed to fetch health status: {e.message}")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown(
-            """
-        <div class="card">
-            <div class="card-header">
-                <span class="card-icon">📊</span>
-                <h3 class="card-title">Session Statistics</h3>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(f"**Queries this session:** {len(st.session_state.query_history)}")
-        st.markdown(f"**Session started:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        if st.button("🗑️ Clear Session Data", use_container_width=True):
-            st.session_state.query_history = []
-            st.session_state.upload_success = None
-            st.success("✅ Session data cleared")
-
-
-# Main Application
-# ----------------
+    except Exception as e:
+        st.error(f"❌ Error loading analytics: {str(e)}")
 
 
 def main():
-    """Main application entry point."""
-    # Apply custom CSS
-    st.markdown(get_custom_css(), unsafe_allow_html=True)
+    """Main application"""
+    # Initialize system
+    settings, db, engine = initialize_system()
 
-    # Render sidebar
-    render_sidebar()
+    # Render header
+    render_header()
 
-    # Route to appropriate page
-    if not st.session_state.authenticated:
-        render_login_page()
-    else:
-        page = st.session_state.current_page
+    # Render sidebar and get selected user
+    user_id = render_sidebar(settings)
 
-        if page == "dashboard":
-            render_dashboard()
-        elif page == "query":
-            render_query_page()
-        elif page == "upload":
-            render_upload_page()
-        elif page == "documents":
-            render_documents_page()
-        elif page == "settings":
-            render_settings_page()
-        else:
-            render_dashboard()
+    if not user_id:
+        st.error("⚠️ No user selected. Please create users first.")
+        return
+
+    # Main content tabs
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["🔍 Search", "📤 Upload", "📚 My Documents", "📊 Analytics"]
+    )
+
+    with tab1:
+        render_search_tab(user_id, engine)
+
+    with tab2:
+        render_upload_tab(user_id, engine, settings)
+
+    with tab3:
+        render_documents_tab(user_id, db)
+
+    with tab4:
+        render_analytics_tab(db)
 
 
 if __name__ == "__main__":

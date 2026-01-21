@@ -3,6 +3,7 @@ Manages PII detection and anonymization using Presidio in a multi-process setup.
 
 """
 
+import logging
 from os import cpu_count
 from concurrent.futures import ProcessPoolExecutor
 from langchain_core.documents import Document
@@ -10,6 +11,20 @@ from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 from presidio_analyzer.nlp_engine import NlpEngineProvider
+
+
+# Blocks noisy logs from Presidio
+logging.basicConfig(level=logging.ERROR)
+
+for logger_name in [
+    "presidio_analyzer",
+    "presidio_anonymizer",
+    "spacy",
+    "presidio-analyzer",
+    "presidio-anonymizer",
+]:
+    logging.getLogger(logger_name).setLevel(logging.ERROR)
+    logging.getLogger(logger_name).propagate = False
 
 
 analyzer = None

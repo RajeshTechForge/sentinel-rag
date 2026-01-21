@@ -2,7 +2,6 @@
 Application factory and FastAPI app initialization for sentinel-rag.
 """
 
-import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -18,10 +17,6 @@ from sentinel_rag.services.audit import AuditLoggingMiddleware
 def create_application() -> FastAPI:
     """Creates and configures the FastAPI application instance."""
     settings = get_settings()
-
-    log_level = logging.DEBUG if settings.debug else logging.WARNING
-    logging.basicConfig(level=log_level)
-    logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
 
     app = FastAPI(
         title=settings.app_name,
