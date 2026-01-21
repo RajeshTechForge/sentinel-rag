@@ -238,7 +238,7 @@ def render_sidebar(settings):
                     total_docs = cur.fetchone()[0]
 
                     # Total chunks
-                    cur.execute("SELECT COUNT(*) FROM chunks")
+                    cur.execute("SELECT COUNT(*) FROM document_chunks")
                     total_chunks = cur.fetchone()[0]
 
                     # User's documents
@@ -323,6 +323,17 @@ def render_upload_tab(user_id: str, engine: SentinelEngine, settings):
 
             with st.spinner("Processing document... This may take a moment."):
                 try:
+                    # Get database instance
+                    _, db, _ = initialize_system()
+
+                    # Convert department name to department_id
+                    dept_id = db.get_department_id_by_name(doc_department)
+                    if not dept_id:
+                        st.error(
+                            f"❌ Department '{doc_department}' not found in database"
+                        )
+                        return
+
                     # Create a temporary file
                     with tempfile.NamedTemporaryFile(
                         delete=False, suffix=Path(uploaded_file.name).suffix
@@ -336,7 +347,7 @@ def render_upload_tab(user_id: str, engine: SentinelEngine, settings):
                         title=doc_title,
                         description=doc_description,
                         user_id=user_id,
-                        department_id=doc_department,
+                        department_id=dept_id,  # Use UUID instead of name
                         classification=doc_classification,
                         use_hierarchical=use_hierarchical,
                     )
@@ -509,7 +520,7 @@ def render_documents_tab(user_id: str, db: DatabaseManager):
                 with db._get_connection() as conn:
                     with conn.cursor() as cur:
                         cur.execute(
-                            "SELECT COUNT(*) FROM chunks WHERE doc_id = %s",
+                            "SELECT COUNT(*) FROM document_chunks WHERE doc_id = %s",
                             (doc["doc_id"],),
                         )
                         chunk_count = cur.fetchone()[0]
@@ -535,7 +546,7 @@ def render_analytics_tab(db: DatabaseManager):
                         COUNT(DISTINCT doc_id) as total_docs,
                         COUNT(*) as total_chunks,
                         AVG(LENGTH(content)) as avg_chunk_size
-                    FROM chunks
+                    FROM document_chunks
                 """)
                 stats = cur.fetchone()
 
