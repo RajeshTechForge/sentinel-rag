@@ -4,7 +4,7 @@
 <br>
 <br>
 
-**Sentinel RAG** is an enterprise-ready RAG framework designed with "Security-First" philosophy. It solves the critical gap in standard RAG implementations: **lack of document-level permissions and data privacy.**
+**Sentinel RAG** is an RAG framework designed with "Security-First" philosophy. It solves the critical gap in standard RAG implementations: **lack of document-level permissions and data privacy.**
 
 *The "Security-First" RAG Framework for Modern Enterprises*
 
@@ -14,14 +14,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)
 
-
-<p align="center">
-  <a href="https://github.com/RajeshTechForge/sentinel-rag/stargazers">
-    <img src="https://img.shields.io/badge/⭐%20Give%20a%20Star-Support%20the%20project-orange?style=for-the-badge" alt="Give a Star">
-  </a>
-</p>
-
-[Key Features](#-key-features) • [Architecture](#-architecture) • [Getting Started](#-getting-started)
+[Key Features](#-key-features) • [Getting Started](#-getting-started)
 
 </div>
 
@@ -48,44 +41,13 @@ Most RAG implementations treat your knowledge base as a flat file system. When a
 
 - 🎯 **Industrial-Grade Rag Precision:** From advanced embeddings (_docs-to-markdown_ and _Context-Aware Hierarchical Splitting_) to _hybrid retrieval(vector + keyword)_ ensure precise context retrieval.
 
-### ⚡ Performance-First Stack
 
-* **FastAPI & Pydantic v2:** Fully asynchronous, type-safe API.
-* **`uv` Powered:** Lightning-fast dependency management and reproducible environments.
+## 📸 App Screenshorts
 
+<img width="1855" height="1093" alt="application_screenshort_1" src="https://github.com/user-attachments/assets/27f5d620-c497-476f-899a-41f9af089563" />
+<img width="1861" height="1093" alt="application_screenshort_2" src="https://github.com/user-attachments/assets/4d113585-aba4-4147-8a5d-0fe6977b4fec" />
 
-## 🏗️ Architecture
-
-```mermaid
-flowchart TD
-    subgraph Client ["🖥️ Client Layer"]
-        User[👤 User / App]
-    end
-
-    subgraph Security_Gate ["🛡️ Sentinel Middleware"]
-        Auth[🔑 Auth Extractor]
-        RBAC_Filter[⚖️ Dynamic Filter Generator]
-        PII_Proc[🔏 PII Redaction: Post-Retrieval]
-    end
-
-    subgraph Knowledge_Base ["🗄️ Secure Vector Store"]
-        VDB[(pgvector / Qdrant)]
-    end
-
-    subgraph Intelligence ["🤖 Inference Engine"]
-        LLM[LLM: Local / Cloud]
-    end
-
-    %% Flow logic
-    User -->|1. Authenticated Query| Auth
-    Auth -->|2. Scoped Metadata| RBAC_Filter
-    RBAC_Filter -->|3. Filtered Search| VDB
-    VDB -->|4. Raw Context| PII_Proc
-    Auth -.->|5. Original Query| PII_Proc
-    PII_Proc -->|6. Clean Query + Context| LLM
-    LLM -->|7. Sanitized Response| User
-
-```
+> These are the screenshots of the Steamlit Demo App
 
 
 ## 🚀 Getting Started
@@ -152,7 +114,7 @@ uv run uvicorn sentinel_rag.api.app:app --reload
 
 | Layer | Technology |
 | --- | --- |
-| **Language** | Python 3.10+ |
+| **Language** | Python 3.10 - 3.13 |
 | **API Framework** | FastAPI (Async) |
 | **Data Validation** | Pydantic v2 |
 | **Package Manager** | uv |
@@ -182,5 +144,5 @@ Distributed under the **Apache License 2.0**. See [LICENSE](LICENSE.md) for more
 ---
 
 <div align="center">
-<p>Built with ❤️ for a more secure AI future.</p>
+<p>Built with ❤️ for a more secure AI future by @RajeshTechForge</p>
 </div>
