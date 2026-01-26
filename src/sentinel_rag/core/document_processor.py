@@ -38,8 +38,22 @@ DENSE_BLOCK_THRESHOLD = 50
 
 class DocumentProcessor:
     def __init__(self):
-        self.docling_parser = DocumentConverter()
-        self.markitdown_parser = MarkItDown()
+        self._docling_parser = None
+        self._markitdown_parser = None
+
+    @property
+    def docling_parser(self):
+        """Lazy initialization of heavy Docling parser."""
+        if self._docling_parser is None:
+            self._docling_parser = DocumentConverter()
+        return self._docling_parser
+
+    @property
+    def markitdown_parser(self):
+        """Lazy initialization of MarkItDown parser."""
+        if self._markitdown_parser is None:
+            self._markitdown_parser = MarkItDown()
+        return self._markitdown_parser
 
     def pdf_complexity_score(
         self, doc: pymupdf.Document, sample_pages: int = 5
@@ -51,7 +65,6 @@ class DocumentProcessor:
         try:
             catalog = doc.pdf_catalog()
             keys = doc.xref_get_keys(catalog) if catalog else []
-            print(keys)
             if "StructTreeRoot" not in keys:
                 score += UNTAGGED_SCORE
         except Exception:
@@ -77,15 +90,15 @@ class DocumentProcessor:
             page = doc[i]
             blocks = page.get_text("blocks")
             images = page.get_images()
+            page_text = page.get_text().strip()
 
             # Image/Scan Detection
-            if len(page.get_text().strip()) < MIN_TEXT_LENGTH and len(images) > 0:
+            if len(page_text) < MIN_TEXT_LENGTH and images:
                 score += SCAN_SCORE
 
             # Table/Column Detection (Block Alignment)
             y_coords = [round(b[1], 1) for b in blocks]
-            duplicates = len(y_coords) - len(set(y_coords))
-            if duplicates > ALIGNMENT_DUPLICATES_THRESHOLD:
+            if len(y_coords) - len(set(y_coords)) > ALIGNMENT_DUPLICATES_THRESHOLD:
                 score += TABLE_COLUMN_SCORE
 
             # Content Density

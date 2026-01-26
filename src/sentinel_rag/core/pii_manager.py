@@ -1,88 +1,111 @@
 """
 Manages PII detection and anonymization using Presidio in a multi-process setup.
-
 """
 
 import logging
-from os import cpu_count
 from concurrent.futures import ProcessPoolExecutor
-from langchain_core.documents import Document
-from presidio_analyzer import AnalyzerEngine
-from presidio_anonymizer import AnonymizerEngine
-from presidio_anonymizer.entities import OperatorConfig
-from presidio_analyzer.nlp_engine import NlpEngineProvider
+from functools import lru_cache
+from os import cpu_count
+from typing import List
 
-
-# Blocks noisy logs from Presidio
-logging.basicConfig(level=logging.ERROR)
-
-for logger_name in [
+# Suppress Presidio and spaCy logs BEFORE imports
+for name in (
     "presidio_analyzer",
     "presidio_anonymizer",
-    "spacy",
     "presidio-analyzer",
     "presidio-anonymizer",
-]:
-    logging.getLogger(logger_name).setLevel(logging.ERROR)
-    logging.getLogger(logger_name).propagate = False
+    "spacy",
+    "spacy.language",
+):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.CRITICAL)
+    logger.propagate = False
 
 
-analyzer = None
-anonymizer = None
+from langchain_core.documents import Document  # noqa: E402
+from presidio_analyzer import AnalyzerEngine  # noqa: E402
+from presidio_analyzer.nlp_engine import NlpEngineProvider  # noqa: E402
+from presidio_anonymizer import AnonymizerEngine  # noqa: E402
+from presidio_anonymizer.entities import OperatorConfig  # noqa: E402
 
-configuration = {
+# Worker-local engines (initialized per process)
+_analyzer = None
+_anonymizer = None
+
+_NLP_CONFIG = {
     "nlp_engine_name": "spacy",
     "models": [{"lang_code": "en", "model_name": "en_core_web_md"}],
 }
 
-provider = NlpEngineProvider(nlp_configuration=configuration)
-nlp_engine = provider.create_engine()
+
+@lru_cache(maxsize=1)
+def _get_nlp_engine():
+    """Lazily initialize NLP engine once per process."""
+    provider = NlpEngineProvider(nlp_configuration=_NLP_CONFIG)
+    return provider.create_engine()
 
 
-def initialize_worker():
-    global analyzer, anonymizer
-    analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
-    anonymizer = AnonymizerEngine()
+def _init_worker():
+    """Initialize Presidio engines in worker process."""
+    global _analyzer, _anonymizer
+    # Suppress logs in worker process
+    for name in ("presidio_analyzer", "presidio_anonymizer", "spacy"):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
+    _analyzer = AnalyzerEngine(nlp_engine=_get_nlp_engine())
+    _anonymizer = AnonymizerEngine()
 
 
-def process_chunk(text: str) -> str:
-    results = analyzer.analyze(text=text, language="en")
-    operators = {"DEFAULT": OperatorConfig("replace")}
-    anonymized_result = anonymizer.anonymize(
-        text=text, analyzer_results=results, operators=operators
-    )
-    return anonymized_result.text
+def _process_text(text: str) -> str:
+    """Process single text chunk for PII."""
+    results = _analyzer.analyze(text=text, language="en")
+    return _anonymizer.anonymize(
+        text=text,
+        analyzer_results=results,
+        operators={"DEFAULT": OperatorConfig("replace")},
+    ).text
 
 
-def process_document(doc: Document) -> Document:
-    doc.page_content = process_chunk(doc.page_content)
-    return doc
+def _process_doc(doc: Document) -> Document:
+    """Process document for PII, returning new document."""
+    return Document(page_content=_process_text(doc.page_content), metadata=doc.metadata)
 
 
 class PiiManager:
-    def __init__(self):
-        self.num_workers = cpu_count() or 1
-        self.executor = ProcessPoolExecutor(
-            max_workers=self.num_workers, initializer=initialize_worker
-        )
+    """Thread-safe PII detection and anonymization manager."""
 
-    def warm_up(self):
-        """Forces initialization of all workers to avoid latency on first request."""
-        dummy_chunks = ["warmup"] * self.num_workers
-        list(self.executor.map(process_chunk, dummy_chunks))
+    def __init__(self, max_workers: int = None):
+        self._max_workers = max_workers or min(cpu_count() or 1, 4)
+        self._executor = None
 
-    def reduce_pii(self, chunks: list[str]):
-        results = list(self.executor.map(process_chunk, chunks))
-        return results
+    @property
+    def executor(self) -> ProcessPoolExecutor:
+        """Lazy executor initialization."""
+        if self._executor is None:
+            self._executor = ProcessPoolExecutor(
+                max_workers=self._max_workers, initializer=_init_worker
+            )
+        return self._executor
 
-    def reduce_pii_documents(self, documents: list[Document]) -> list[Document]:
-        results = list(self.executor.map(process_document, documents))
-        return results
+    def reduce_pii(self, chunks: List[str]) -> List[str]:
+        """Anonymize PII in text chunks."""
+        if not chunks:
+            return []
+        return list(self.executor.map(_process_text, chunks))
+
+    def reduce_pii_documents(self, documents: List[Document]) -> List[Document]:
+        """Anonymize PII in documents."""
+        if not documents:
+            return []
+        return list(self.executor.map(_process_doc, documents))
 
     def close(self):
-        """Explicitly shutdown the process pool executor."""
-        if hasattr(self, "executor"):
-            self.executor.shutdown(wait=True)
+        """Shutdown executor gracefully."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
 
-    def __del__(self):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
         self.close()

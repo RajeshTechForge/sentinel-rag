@@ -1,45 +1,44 @@
 """
 Seeder module to populate initial data into the database.
-Reads config.json and populates the database with departments and
-roles if they don't already exist.
-
+Reads RBAC config and creates missing departments and roles.
 """
 
 from typing import Dict
+
 from .exceptions import SeederError
 
 
-def seed_initial_data(db=None, rbac_config: Dict = {}):
+def seed_initial_data(db=None, rbac_config: Dict = None):
+    """Seed database with departments and roles from RBAC config."""
     if db is None:
         raise SeederError("Database instance is required")
 
-    #        Fill Departments
-    # ------------------------------
+    rbac_config = rbac_config or {}
+
+    # Seed departments
     existing_depts = set(db.get_all_departments())
-    target_depts = rbac_config.get("DEPARTMENTS", [])
+    new_depts = [
+        d for d in rbac_config.get("departments", []) if d not in existing_depts
+    ]
 
-    for dept_name in target_depts:
-        if dept_name not in existing_depts:
-            try:
-                db.create_department(dept_name)
-            except Exception as e:
-                raise SeederError(f"Error creating department '{dept_name}': {e}")
+    for dept_name in new_depts:
+        try:
+            db.create_department(dept_name)
+        except Exception as e:
+            raise SeederError(f"Failed to create department '{dept_name}': {e}") from e
 
-    #         Fill Roles
-    # ------------------------------
-    existing_roles_data = db.get_all_roles()
-    existing_role_dept_pairs = {
-        (r["role_name"], r["department_name"]) for r in existing_roles_data
+    # Seed roles
+    existing_roles = {
+        (r["role_name"], r["department_name"]) for r in db.get_all_roles()
     }
+    roles_map = rbac_config.get("roles", {})
 
-    roles_map = rbac_config.get("ROLES", {})
-
-    for dept_name, roles_list in roles_map.items():
-        for role_name in roles_list:
-            if (role_name, dept_name) not in existing_role_dept_pairs:
+    for dept_name, roles in roles_map.items():
+        for role_name in roles:
+            if (role_name, dept_name) not in existing_roles:
                 try:
                     db.create_role(role_name, dept_name)
                 except Exception as e:
                     raise SeederError(
-                        f"Error creating role '{role_name}' in department '{dept_name}': {e}"
-                    )
+                        f"Failed to create role '{role_name}' in '{dept_name}': {e}"
+                    ) from e

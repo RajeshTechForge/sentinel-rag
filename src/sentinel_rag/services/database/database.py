@@ -4,32 +4,51 @@ including hierarchical document storage and hybrid retrieval using vector and ke
 
 """
 
+from contextlib import contextmanager
 from os import path as os_path
 from typing import List, Optional, Dict
-from dotenv import load_dotenv
+
 import psycopg2
-from psycopg2.extras import RealDictCursor, Json
+from psycopg2 import pool
+from psycopg2.extras import RealDictCursor, Json, execute_batch
 from pgvector.psycopg2 import register_vector
 from langchain_core.documents import Document
 
 from .exceptions import DatabaseError
 
-load_dotenv()
-
 
 class DatabaseManager:
-    def __init__(self, database_url: str):
-        self.database_url = database_url
-        self.connection_params = psycopg2.extensions.parse_dsn(database_url)
-        self._init_tables()
+    _MIN_POOL_SIZE = 2
+    _MAX_POOL_SIZE = 10
 
-    def _get_connection(self):
+    def __init__(self, database_url: str):
+        self.connection_params = psycopg2.extensions.parse_dsn(database_url)
+        self._pool = None
+        self._init_tables()
+        self._init_pool()
+
+    def _init_pool(self):
+        """Initialize connection pool."""
         try:
-            conn = psycopg2.connect(**self.connection_params)
-            register_vector(conn)
-            return conn
+            self._pool = pool.ThreadedConnectionPool(
+                self._MIN_POOL_SIZE, self._MAX_POOL_SIZE, **self.connection_params
+            )
         except Exception as e:
-            raise DatabaseError(f"Error connecting to the database: {e}")
+            raise DatabaseError(f"Failed to initialize connection pool: {e}")
+
+    @contextmanager
+    def _get_connection(self):
+        """Get a connection from the pool with automatic cleanup."""
+        conn = None
+        try:
+            conn = self._pool.getconn()
+            register_vector(conn)
+            yield conn
+        except Exception as e:
+            raise DatabaseError(f"Database connection error: {e}")
+        finally:
+            if conn:
+                self._pool.putconn(conn)
 
     def _init_tables(self):
         """Initialize database tables from schema.sql."""
@@ -241,13 +260,12 @@ class DatabaseManager:
 
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                doc_id = None
                 cur.execute(
                     """
                     INSERT INTO documents (filename, title, description, uploaded_by, department_id, classification, metadata)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING doc_id
-                """,
+                    """,
                     (
                         source,
                         title,
@@ -260,30 +278,26 @@ class DatabaseManager:
                 )
                 doc_id = cur.fetchone()[0]
 
-                # Insert chunks
+                # Batch insert chunks for efficiency
                 insert_sql = """
-                INSERT INTO document_chunks (doc_id, content, page_number, chunk_index, embedding, metadata)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO document_chunks (doc_id, content, page_number, chunk_index, embedding, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """
-
-                for idx, (doc, emb) in enumerate(zip(documents, embeddings)):
-                    metadata = doc.metadata.copy()
-                    page = metadata.get("page", 0)
-
-                    cur.execute(
-                        insert_sql,
-                        (
-                            doc_id,
-                            doc.page_content,
-                            page,
-                            idx,
-                            emb,
-                            Json(metadata),
-                        ),
+                chunk_data = [
+                    (
+                        doc_id,
+                        doc.page_content,
+                        doc.metadata.get("page", 0),
+                        idx,
+                        emb,
+                        Json(doc.metadata),
                     )
+                    for idx, (doc, emb) in enumerate(zip(documents, embeddings))
+                ]
+                execute_batch(cur, insert_sql, chunk_data, page_size=100)
+
             conn.commit()
 
-        print(f"Saved {len(documents)} document chunks to database.")
         return str(doc_id)
 
     #     Parent-Document Document Upload
@@ -328,7 +342,7 @@ class DatabaseManager:
                     INSERT INTO documents (filename, title, description, uploaded_by, department_id, classification, metadata)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING doc_id
-                """,
+                    """,
                     (
                         source,
                         title,
@@ -343,70 +357,62 @@ class DatabaseManager:
                 )
                 doc_id = cur.fetchone()[0]
 
-                # Insert parent chunks first (without embeddings, only for retrieval)
+                # Batch insert parent chunks
+                parent_insert_sql = """
+                    INSERT INTO document_chunks 
+                    (doc_id, content, page_number, chunk_index, is_parent, chunk_type, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING chunk_id
+                """
                 parent_chunk_ids = []
                 for idx, parent_doc in enumerate(parent_chunks):
-                    metadata = parent_doc.metadata.copy()
-                    page = metadata.get("page", 0)
-
                     cur.execute(
-                        """
-                        INSERT INTO document_chunks 
-                        (doc_id, content, page_number, chunk_index, is_parent, chunk_type, metadata)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING chunk_id
-                        """,
+                        parent_insert_sql,
                         (
                             doc_id,
                             parent_doc.page_content,
-                            page,
+                            parent_doc.metadata.get("page", 0),
                             idx,
                             True,
                             "parent",
-                            Json(metadata),
+                            Json(parent_doc.metadata),
                         ),
                     )
                     parent_chunk_ids.append(cur.fetchone()[0])
 
-                # Insert child chunks with embeddings and parent references
+                # Batch insert child chunks
+                child_insert_sql = """
+                    INSERT INTO document_chunks 
+                    (doc_id, content, page_number, chunk_index, embedding, parent_chunk_id, is_parent, chunk_type, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                child_data = []
                 for idx, (child_doc, emb) in enumerate(
                     zip(child_chunks, child_embeddings)
                 ):
-                    metadata = child_doc.metadata.copy()
-                    page = metadata.get("page", 0)
-                    parent_idx = metadata.get("parent_index", 0)
-
-                    # Get parent_chunk_id from the relationships or metadata
+                    parent_idx = child_doc.metadata.get("parent_index", 0)
                     parent_chunk_id = (
                         parent_chunk_ids[parent_idx]
                         if parent_idx < len(parent_chunk_ids)
                         else None
                     )
-
-                    cur.execute(
-                        """
-                        INSERT INTO document_chunks 
-                        (doc_id, content, page_number, chunk_index, embedding, parent_chunk_id, is_parent, chunk_type, metadata)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
+                    child_data.append(
                         (
                             doc_id,
                             child_doc.page_content,
-                            page,
+                            child_doc.metadata.get("page", 0),
                             idx,
                             emb,
                             parent_chunk_id,
                             False,
                             "child",
-                            Json(metadata),
-                        ),
+                            Json(child_doc.metadata),
+                        )
                     )
+                execute_batch(cur, child_insert_sql, child_data, page_size=100)
 
             conn.commit()
 
-        print(
-            f"Saved {len(parent_chunks)} parent chunks and {len(child_chunks)} child chunks to database."
-        )
         return str(doc_id)
 
     #      Hybrid Documents Retrieval
@@ -559,24 +565,27 @@ class DatabaseManager:
                         return []
 
                     for row in rows:
-                        score = row["rrf_score"]
-
                         metadata = {
                             **(row["metadata"] or {}),
                             "source": row["filename"],
                             "department": row["department"],
                             "classification": row["classification"],
-                            "score": round(score, 4),
+                            "score": round(row["rrf_score"], 4),
                             "retrieval_type": "parent"
                             if use_parent_retrieval
                             else "direct",
                         }
-
                         results.append(
                             Document(page_content=row["content"], metadata=metadata)
                         )
+
         except Exception as e:
-            print(f"Database error during retrieval: {e}")
-            raise
+            raise DatabaseError(f"Search failed: {e}") from e
 
         return results
+
+    def close(self):
+        """Close the connection pool."""
+        if self._pool:
+            self._pool.closeall()
+            self._pool = None

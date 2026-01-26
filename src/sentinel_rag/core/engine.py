@@ -9,7 +9,7 @@ as well as secure and efficient querying with role-based access control (RBAC) a
 import os
 import tempfile
 import shutil
-from typing import Dict
+from typing import Dict, List
 from sentinel_rag.config.config import get_settings
 from .embeddings import EmbeddingFactory
 
@@ -18,6 +18,13 @@ from .rbac_manager import RbacManager
 from .pii_manager import PiiManager
 from .document_processor import DocumentProcessor
 from .exceptions import DocumentIngestionError, QueryError
+
+
+def _to_native_floats(embedding) -> List[float]:
+    """Convert embedding to native Python floats (handles numpy arrays)."""
+    if hasattr(embedding, "tolist"):
+        return embedding.tolist()
+    return [float(x) for x in embedding]
 
 
 class SentinelEngine:
@@ -100,16 +107,13 @@ class SentinelEngine:
                 raise DocumentIngestionError("No child chunks created from documents.")
 
             try:
-                print("Generating embeddings for child chunks...")
                 text_content = [doc.page_content for doc in child_chunks]
                 embeddings = self.embeddings.embed_documents(text_content)
-                embeddings = [[float(x) for x in emb] for emb in embeddings]
-
+                embeddings = [_to_native_floats(emb) for emb in embeddings]
             except Exception as e:
                 raise DocumentIngestionError(f"Failed to generate embeddings: {e}")
 
             try:
-                print("Saving hierarchical chunks to database...")
                 doc_id = self.db.save_hierarchical_documents(
                     parent_chunks,
                     child_chunks,
@@ -121,7 +125,6 @@ class SentinelEngine:
                     department_id,
                     classification,
                 )
-                print("Hierarchical ingestion complete.")
                 return doc_id
             except Exception as e:
                 raise DocumentIngestionError(
@@ -133,16 +136,13 @@ class SentinelEngine:
                 raise DocumentIngestionError("No text chunks created from documents.")
 
             try:
-                print("Generating embeddings...")
                 text_content = [doc.page_content for doc in doc_chunks]
                 embeddings = self.embeddings.embed_documents(text_content)
-                embeddings = [[float(x) for x in emb] for emb in embeddings]
-
+                embeddings = [_to_native_floats(emb) for emb in embeddings]
             except Exception as e:
                 raise DocumentIngestionError(f"Failed to generate embeddings: {e}")
 
             try:
-                print("Saving to database...")
                 doc_id = self.db.save_documents(
                     doc_chunks,
                     embeddings,
@@ -152,7 +152,6 @@ class SentinelEngine:
                     department_id,
                     classification,
                 )
-                print("Ingestion complete.")
                 return doc_id
             except Exception as e:
                 raise DocumentIngestionError(
@@ -168,11 +167,10 @@ class SentinelEngine:
         try:
             filters = self.rbac.get_user_access_filters(user_id, self.db)
             if not filters:
-                print("User has no access to any documents.")
                 return []
 
             query_embedding = self.embeddings.embed_query(question)
-            query_embedding = [float(x) for x in query_embedding]
+            query_embedding = _to_native_floats(query_embedding)
         except Exception as e:
             raise QueryError(f"Failed to generate query embedding: {e}")
 
