@@ -2,7 +2,7 @@
 #       SENTINEL RAG - DOCKER COMPOSE
 # ============================================
 # Complete local development and production setup
-# with PostgreSQL + pgvector and the Sentinel RAG API.
+# with PostgreSQL, Qdrant vector database, and the Sentinel RAG API.
 #
 # Usage:
 #   Development:  docker compose up --build
@@ -11,10 +11,10 @@
 
 services:
   # ----------------------------------------------
-  #  PostgreSQL with pgvector extension
+  #  PostgreSQL (Relational data + Full-text search)
   # ----------------------------------------------
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16-alpine
     container_name: sentinel-postgres
     restart: unless-stopped
     env_file:
@@ -22,9 +22,30 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"  # Using 5433 to avoid conflict with local PostgreSQL
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel_rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sentinel-network
+
+  # ----------------------------------------------
+  #  Qdrant (Vector similarity search)
+  # ----------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: sentinel-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,18 +65,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Load environment variables from .env file
+      qdrant:
+        condition: service_healthy
     env_file:
       - .env
     environment:
-      # Infrastructure-specific overrides (Take precedence over .env)
       POSTGRES_HOST: postgres
-      # The App INSIDE the container will always find the config here
+      QDRANT_HOST: qdrant
       SENTINEL_CONFIG_PATH: /app/config/runtime_config.json
     ports:
       - "8000:8000"
     volumes:
-      # Map the Host path (from .env) to the Container path
       - ${SENTINEL_CONFIG_PATH:-./config/config.json}:/app/config/runtime_config.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -71,6 +91,8 @@ services:
 # ----------------------------------------------
 volumes:
   postgres_data:
+    driver: local
+  qdrant_data:
     driver: local
 
 # ----------------------------------------------
