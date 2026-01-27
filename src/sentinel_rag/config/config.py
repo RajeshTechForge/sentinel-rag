@@ -42,6 +42,16 @@ class EmbeddingSettings(BaseSettings):
     provider: str = "fake"  # openai, gemini, fake
     model_name: str = ""  # Optional, provider defaults used if empty
     api_key: str = ""
+    vector_size: int = 1536  # Dimension of embedding vectors
+
+
+class QdrantSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="QDRANT_")
+
+    host: str = "localhost"
+    port: int = 6333
+    api_key: str = ""
+    prefer_grpc: bool = True
 
 
 class OIDCSettings(BaseSettings):
@@ -130,6 +140,7 @@ class AppSettings(BaseSettings):
     debug: bool = True
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
     doc_retrieval: DocRetrievalSettings = Field(default_factory=DocRetrievalSettings)
     embeddings: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     oidc: OIDCSettings = Field(default_factory=OIDCSettings)
