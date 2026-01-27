@@ -9,6 +9,7 @@ build/
 dist/
 wheels/
 *.egg-info
+qdrant_data/
 
 # Virtual environments
 .venv/

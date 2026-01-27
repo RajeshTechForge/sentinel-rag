@@ -120,8 +120,8 @@ When you call the `/query` endpoint, the following sequence occurs:
 
 1. **Identity Check:** The system fetches the `user_id` and their associated roles from the DB.
 2. **Filter Generation:** `RbacManager.get_user_access_filters()` generates a list of allowed metadata tags.
-3. **Vector Search:** These tags are injected into the `pgvector` query.
-4. **Result:** The database **only** returns chunks that match the user's allowed classification and department.
+3. **Vector Search:** These tags are injected into the Qdrant query and PostgreSQL full-text search.
+4. **Result:** Only chunks matching the user's allowed classification and department are returned.
 
 ---
 
