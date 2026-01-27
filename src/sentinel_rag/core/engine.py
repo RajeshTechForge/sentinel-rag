@@ -356,14 +356,14 @@ class SentinelEngine:
                 vector_results = self.vector_store.search_with_parent_retrieval(
                     query_embedding=query_embedding,
                     filters=filters,
-                    k=self.max_retrieved_docs + 10,
+                    k=self.max_retrieved_docs,
                     threshold=self.similarity_threshold,
                 )
             else:
                 vector_results = self.vector_store.search(
                     query_embedding=query_embedding,
                     filters=filters,
-                    k=self.max_retrieved_docs + 10,
+                    k=self.max_retrieved_docs,
                     threshold=self.similarity_threshold,
                 )
 
@@ -372,7 +372,7 @@ class SentinelEngine:
             keyword_results = self.db.keyword_search(
                 query_text=question,
                 filters=filters,
-                k=self.max_retrieved_docs + 10,
+                k=self.max_retrieved_docs,
                 chunk_type=chunk_type,
             )
 
