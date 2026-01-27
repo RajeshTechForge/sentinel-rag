@@ -32,8 +32,14 @@ class DatabaseSettings(BaseSettings):
 
 class DocRetrievalSettings(BaseSettings):
     max_retrieved_docs: int = Field(default=20, ge=1, le=100)
-    similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
     rrf_constant: int = Field(default=60, ge=1, le=100)
+
+    use_parent_retrieval: bool = True
+    parent_chunk_size: int = Field(default=2000, ge=500, le=8000)
+    parent_chunk_overlap: int = Field(default=200, ge=0, le=1000)
+    child_chunk_size: int = Field(default=400, ge=100, le=2000)
+    child_chunk_overlap: int = Field(default=50, ge=0, le=500)
 
 
 class EmbeddingSettings(BaseSettings):
@@ -42,6 +48,16 @@ class EmbeddingSettings(BaseSettings):
     provider: str = "fake"  # openai, gemini, fake
     model_name: str = ""  # Optional, provider defaults used if empty
     api_key: str = ""
+    vector_size: int = 1536  # Dimension of embedding vectors
+
+
+class QdrantSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="QDRANT_")
+
+    host: str = "localhost"
+    port: int = 6333
+    api_key: str = ""
+    prefer_grpc: bool = False  # Default to HTTP for better compatibility
 
 
 class OIDCSettings(BaseSettings):
@@ -130,6 +146,7 @@ class AppSettings(BaseSettings):
     debug: bool = True
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
     doc_retrieval: DocRetrievalSettings = Field(default_factory=DocRetrievalSettings)
     embeddings: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     oidc: OIDCSettings = Field(default_factory=OIDCSettings)
@@ -175,6 +192,25 @@ class AppSettings(BaseSettings):
             )
             self.doc_retrieval.rrf_constant = doc_retrieval_cfg.get(
                 "rrf_constant", self.doc_retrieval.rrf_constant
+            )
+
+            # Parent-Document Retrieval settings
+            self.doc_retrieval.use_parent_retrieval = self._parse_bool(
+                doc_retrieval_cfg.get(
+                    "use_parent_retrieval", self.doc_retrieval.use_parent_retrieval
+                )
+            )
+            self.doc_retrieval.parent_chunk_size = doc_retrieval_cfg.get(
+                "parent_chunk_size", self.doc_retrieval.parent_chunk_size
+            )
+            self.doc_retrieval.parent_chunk_overlap = doc_retrieval_cfg.get(
+                "parent_chunk_overlap", self.doc_retrieval.parent_chunk_overlap
+            )
+            self.doc_retrieval.child_chunk_size = doc_retrieval_cfg.get(
+                "child_chunk_size", self.doc_retrieval.child_chunk_size
+            )
+            self.doc_retrieval.child_chunk_overlap = doc_retrieval_cfg.get(
+                "child_chunk_overlap", self.doc_retrieval.child_chunk_overlap
             )
 
             # Load RBAC configuration

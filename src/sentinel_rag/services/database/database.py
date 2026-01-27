@@ -1,7 +1,8 @@
 """
-DatabaseManager: Manages PostgreSQL database interactions for user, department, role, and document management,
-including hierarchical document storage and hybrid retrieval using vector and keyword search.
+DatabaseManager: Manages PostgreSQL database interactions for user, department,
+role, and document metadata management, including full-text search for hybrid retrieval.
 
+Vector operations are handled separately by QdrantStore.
 """
 
 from contextlib import contextmanager
@@ -11,8 +12,6 @@ from typing import List, Optional, Dict
 import psycopg2
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor, Json, execute_batch
-from pgvector.psycopg2 import register_vector
-from langchain_core.documents import Document
 
 from .exceptions import DatabaseError
 
@@ -42,7 +41,6 @@ class DatabaseManager:
         conn = None
         try:
             conn = self._pool.getconn()
-            register_vector(conn)
             yield conn
         except Exception as e:
             raise DatabaseError(f"Database connection error: {e}")
@@ -59,7 +57,6 @@ class DatabaseManager:
         except Exception as e:
             raise DatabaseError(f"Error reading database schema file: {e}")
 
-        # Use raw connection to avoid register_vector error before extension exists
         conn = psycopg2.connect(**self.connection_params)
         try:
             with conn.cursor() as cur:
@@ -71,8 +68,9 @@ class DatabaseManager:
             conn.close()
             print("Database tables initialized.")
 
-    #        User Management
-    # -------------------------------
+    # ─────────────────────────────────────────────
+    #                User Management
+    # ─────────────────────────────────────────────
     def create_user(self, email: str, full_name: str = None) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
@@ -100,7 +98,7 @@ class DatabaseManager:
                     JOIN roles r ON ua.role_id = r.role_id
                     JOIN departments d ON ua.department_id = d.department_id
                     WHERE ua.user_id = %s
-                """,
+                    """,
                     (user_id,),
                 )
                 return cur.fetchall()
@@ -110,18 +108,20 @@ class DatabaseManager:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT d.doc_id, d.filename, d.title, d.description, d.classification, d.created_at, dept.department_name
+                    SELECT d.doc_id, d.filename, d.title, d.description, 
+                           d.classification, d.created_at, dept.department_name
                     FROM documents d
                     JOIN departments dept ON d.department_id = dept.department_id
                     WHERE d.uploaded_by = %s
                     ORDER BY d.created_at DESC
-                """,
+                    """,
                     (user_id,),
                 )
                 return cur.fetchall()
 
-    #       Department Management
-    # -------------------------------
+    # ─────────────────────────────────────────────
+    #             Department Management
+    # ─────────────────────────────────────────────
     def create_department(self, department_name: str) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
@@ -148,7 +148,7 @@ class DatabaseManager:
                     FROM departments d 
                     JOIN user_access ua ON d.department_id = ua.department_id 
                     WHERE ua.user_id = %s
-                """,
+                    """,
                     (user_id,),
                 )
                 return [row[0] for row in cur.fetchall()]
@@ -163,12 +163,22 @@ class DatabaseManager:
                 res = cur.fetchone()
                 return str(res[0]) if res else None
 
-    #        Role Management
-    # -------------------------------
+    def get_department_name_by_id(self, department_id: str) -> Optional[str]:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT department_name FROM departments WHERE department_id = %s",
+                    (department_id,),
+                )
+                res = cur.fetchone()
+                return res[0] if res else None
+
+    # ─────────────────────────────────────────────
+    #               Role Management
+    # ─────────────────────────────────────────────
     def create_role(self, role_name: str, department_name: str) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                # Get department_id
                 cur.execute(
                     "SELECT department_id FROM departments WHERE department_name = %s",
                     (department_name,),
@@ -190,7 +200,11 @@ class DatabaseManager:
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT r.role_name, d.department_name FROM roles r JOIN departments d ON r.department_id = d.department_id"
+                    """
+                    SELECT r.role_name, d.department_name 
+                    FROM roles r 
+                    JOIN departments d ON r.department_id = d.department_id
+                    """
                 )
                 return cur.fetchall()
 
@@ -203,7 +217,7 @@ class DatabaseManager:
                     FROM roles r 
                     JOIN departments d ON r.department_id = d.department_id
                     WHERE d.department_name = %s
-                """,
+                    """,
                     (department_name,),
                 )
                 return [row[0] for row in cur.fetchall()]
@@ -216,7 +230,7 @@ class DatabaseManager:
                     SELECT r.role_id, d.department_id FROM roles r 
                     JOIN departments d ON r.department_id = d.department_id
                     WHERE r.role_name = %s AND d.department_name = %s
-                """,
+                    """,
                     (role_name, department_name),
                 )
                 res = cur.fetchone()
@@ -227,213 +241,187 @@ class DatabaseManager:
                 role_id, department_id = res
 
                 cur.execute(
-                    "INSERT INTO user_access (user_id, department_id, role_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                    """
+                    INSERT INTO user_access (user_id, department_id, role_id) 
+                    VALUES (%s, %s, %s) ON CONFLICT DO NOTHING
+                    """,
                     (user_id, department_id, role_id),
                 )
             conn.commit()
 
-    #      General Document Management
-    # -------------------------------------
-    def save_documents(
+    # ─────────────────────────────────────────────
+    #          Document Metadata Management
+    # ─────────────────────────────────────────────
+    def create_document(
         self,
-        documents: List[Document],
-        embeddings: List[List[float]],
+        filename: str,
         title: str,
         description: str,
         user_id: str,
         department_id: str,
         classification: str,
+        metadata: Optional[dict] = None,
     ) -> str:
-        """
-        Save document chunks with embeddings.
-        Assumes all documents in the list belong to the same source file.
-        If user_id is provided, creates a new document entry.
-        """
-        if not documents:
-            return ""
-
-        if len(documents) != len(embeddings):
-            raise ValueError("Number of documents and embeddings must match")
-
-        # Assume all chunks belong to the same source
-        source = documents[0].metadata.get("source", "unknown")
-
+        """Create a document metadata entry."""
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO documents (filename, title, description, uploaded_by, department_id, classification, metadata)
+                    INSERT INTO documents 
+                    (filename, title, description, uploaded_by, department_id, classification, metadata)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING doc_id
                     """,
                     (
-                        source,
+                        filename,
                         title,
                         description,
                         user_id,
                         department_id,
                         classification,
-                        Json({"source": source}),
+                        Json(metadata or {}),
                     ),
                 )
                 doc_id = cur.fetchone()[0]
+            conn.commit()
+        return str(doc_id)
 
-                # Batch insert chunks for efficiency
-                insert_sql = """
-                    INSERT INTO document_chunks (doc_id, content, page_number, chunk_index, embedding, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """
-                chunk_data = [
+    def save_chunk_metadata(
+        self,
+        doc_id: str,
+        chunk_id: str,
+        content: str,
+        page_number: int,
+        chunk_index: int,
+        metadata: Optional[dict] = None,
+        chunk_type: str = "child",
+        parent_chunk_id: Optional[str] = None,
+    ):
+        """Save chunk metadata and content for full-text search."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO document_chunks 
+                    (chunk_id, doc_id, content, page_number, chunk_index, chunk_type, parent_chunk_id, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (chunk_id) DO NOTHING
+                    """,
                     (
+                        chunk_id,
                         doc_id,
-                        doc.page_content,
-                        doc.metadata.get("page", 0),
-                        idx,
-                        emb,
-                        Json(doc.metadata),
-                    )
-                    for idx, (doc, emb) in enumerate(zip(documents, embeddings))
-                ]
-                execute_batch(cur, insert_sql, chunk_data, page_size=100)
-
+                        content,
+                        page_number,
+                        chunk_index,
+                        chunk_type,
+                        parent_chunk_id,
+                        Json(metadata or {}),
+                    ),
+                )
             conn.commit()
 
-        return str(doc_id)
-
-    #     Parent-Document Document Upload
-    # -------------------------------------------
-    def save_hierarchical_documents(
+    def save_chunks_batch(
         self,
-        parent_chunks: List[Document],
-        child_chunks: List[Document],
-        child_embeddings: List[List[float]],
-        relationships: List[tuple],
-        title: str,
-        description: str,
-        user_id: str,
-        department_id: str,
-        classification: str,
-    ) -> str:
+        doc_id: str,
+        chunk_ids: List[str],
+        contents: List[str],
+        page_numbers: List[int],
+        chunk_indexes: List[int],
+        metadatas: List[dict],
+        chunk_types: Optional[List[str]] = None,
+        parent_chunk_ids: Optional[List[str]] = None,
+    ):
+        """Batch save chunk metadata for full-text search."""
+        if not chunk_ids:
+            return
+
+        chunk_types = chunk_types or ["child"] * len(chunk_ids)
+        parent_chunk_ids = parent_chunk_ids or [None] * len(chunk_ids)
+
+        insert_sql = """
+            INSERT INTO document_chunks 
+            (chunk_id, doc_id, content, page_number, chunk_index, chunk_type, parent_chunk_id, metadata)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (chunk_id) DO NOTHING
         """
-        Save hierarchical document chunks for Parent-Document Retrieval.
 
-        Args:
-            parent_chunks: Larger chunks for context retrieval
-            child_chunks: Smaller chunks for precise semantic search
-            child_embeddings: Embeddings for child chunks only
-            relationships: List of (parent_idx, child_idx) tuples
-
-        Returns:
-            doc_id: UUID of the created document
-        """
-        if not parent_chunks or not child_chunks:
-            return ""
-
-        if len(child_chunks) != len(child_embeddings):
-            raise ValueError("Number of child chunks and embeddings must match")
-
-        source = parent_chunks[0].metadata.get("source", "unknown")
+        data = [
+            (
+                chunk_id,
+                doc_id,
+                content,
+                page_num,
+                chunk_idx,
+                chunk_type,
+                parent_id,
+                Json(meta),
+            )
+            for chunk_id, content, page_num, chunk_idx, chunk_type, parent_id, meta in zip(
+                chunk_ids,
+                contents,
+                page_numbers,
+                chunk_indexes,
+                chunk_types,
+                parent_chunk_ids,
+                metadatas,
+            )
+        ]
 
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                # Create document entry
-                cur.execute(
-                    """
-                    INSERT INTO documents (filename, title, description, uploaded_by, department_id, classification, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING doc_id
-                    """,
-                    (
-                        source,
-                        title,
-                        description,
-                        user_id,
-                        department_id,
-                        classification,
-                        Json(
-                            {"source": source, "retrieval_strategy": "parent_document"}
-                        ),
-                    ),
-                )
-                doc_id = cur.fetchone()[0]
-
-                # Batch insert parent chunks
-                parent_insert_sql = """
-                    INSERT INTO document_chunks 
-                    (doc_id, content, page_number, chunk_index, is_parent, chunk_type, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING chunk_id
-                """
-                parent_chunk_ids = []
-                for idx, parent_doc in enumerate(parent_chunks):
-                    cur.execute(
-                        parent_insert_sql,
-                        (
-                            doc_id,
-                            parent_doc.page_content,
-                            parent_doc.metadata.get("page", 0),
-                            idx,
-                            True,
-                            "parent",
-                            Json(parent_doc.metadata),
-                        ),
-                    )
-                    parent_chunk_ids.append(cur.fetchone()[0])
-
-                # Batch insert child chunks
-                child_insert_sql = """
-                    INSERT INTO document_chunks 
-                    (doc_id, content, page_number, chunk_index, embedding, parent_chunk_id, is_parent, chunk_type, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                child_data = []
-                for idx, (child_doc, emb) in enumerate(
-                    zip(child_chunks, child_embeddings)
-                ):
-                    parent_idx = child_doc.metadata.get("parent_index", 0)
-                    parent_chunk_id = (
-                        parent_chunk_ids[parent_idx]
-                        if parent_idx < len(parent_chunk_ids)
-                        else None
-                    )
-                    child_data.append(
-                        (
-                            doc_id,
-                            child_doc.page_content,
-                            child_doc.metadata.get("page", 0),
-                            idx,
-                            emb,
-                            parent_chunk_id,
-                            False,
-                            "child",
-                            Json(child_doc.metadata),
-                        )
-                    )
-                execute_batch(cur, child_insert_sql, child_data, page_size=100)
-
+                execute_batch(cur, insert_sql, data, page_size=100)
             conn.commit()
 
-        return str(doc_id)
+    def get_document_by_id(self, doc_id: str) -> Optional[Dict]:
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT d.*, dept.department_name 
+                    FROM documents d
+                    JOIN departments dept ON d.department_id = dept.department_id
+                    WHERE d.doc_id = %s
+                    """,
+                    (doc_id,),
+                )
+                return cur.fetchone()
 
-    #      Hybrid Documents Retrieval
-    # --------------------------------------
-    def search_documents(
+    def delete_document(self, doc_id: str) -> bool:
+        """Delete a document and its chunks."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM documents WHERE doc_id = %s", (doc_id,))
+                deleted = cur.rowcount > 0
+            conn.commit()
+        return deleted
+
+    # ─────────────────────────────────────────────
+    #           Full-Text Search (Keyword)
+    # ─────────────────────────────────────────────
+    def keyword_search(
         self,
         query_text: str,
-        query_embedding: List[float],
         filters: List[tuple],
-        k: int = 0,
-        threshold: float = 0,
-        rrf_k: int = 60,
-        use_parent_retrieval: bool = False,
-    ) -> List[Document]:
-        if not filters:
-            print("No access filters provided. Access denied.")
+        k: int = 20,
+        chunk_type: Optional[str] = None,
+    ) -> List[Dict]:
+        """
+        Perform full-text search with RBAC filtering.
+
+        Args:
+            query_text: Search query.
+            filters: List of (department, classification) tuples for RBAC.
+            k: Maximum results to return.
+            chunk_type: Optional filter for 'parent' or 'child' chunks.
+
+        Returns:
+            List of chunk data with BM25 rank scores.
+        """
+        if not filters or not query_text.strip():
             return []
 
         where_clauses = []
         params = []
-
         for dept, cls in filters:
             where_clauses.append(
                 "(dept.department_name = %s AND d.classification = %s)"
@@ -442,147 +430,124 @@ class DatabaseManager:
 
         where_sql = " OR ".join(where_clauses)
 
-        if use_parent_retrieval:
-            query_sql = f"""
-                WITH vector_search AS (
-                    SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY dc.embedding <=> %s::vector) as rank
-                    FROM document_chunks dc
-                    JOIN documents d ON dc.doc_id = d.doc_id
-                    JOIN departments dept ON d.department_id = dept.department_id
-                    WHERE ({where_sql})
-                      AND dc.chunk_type = 'child'
-                      AND dc.embedding IS NOT NULL
-                      AND (dc.embedding <=> %s::vector) < %s
-                    ORDER BY dc.embedding <=> %s::vector
-                    LIMIT %s
-                ),
-                keyword_search AS (
-                    SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY ts_rank_cd(dc.searchable_text_tsvector, websearch_to_tsquery('english', %s)) DESC) as rank
-                    FROM document_chunks dc
-                    JOIN documents d ON dc.doc_id = d.doc_id
-                    JOIN departments dept ON d.department_id = dept.department_id
-                    WHERE dc.searchable_text_tsvector @@ websearch_to_tsquery('english', %s)
-                      AND ({where_sql})
-                      AND dc.chunk_type = 'child'
-                    ORDER BY rank
-                    LIMIT %s
-                ),
-                matched_children AS (
-                    SELECT DISTINCT
-                        dc.chunk_id,
-                        dc.parent_chunk_id,
-                        COALESCE(1.0 / ({rrf_k} + vs.rank), 0.0) + 
-                        COALESCE(1.0 / ({rrf_k} + ks.rank), 0.0) AS rrf_score
-                    FROM document_chunks dc
-                    LEFT JOIN vector_search vs ON dc.chunk_id = vs.chunk_id
-                    LEFT JOIN keyword_search ks ON dc.chunk_id = ks.chunk_id
-                    WHERE vs.chunk_id IS NOT NULL OR ks.chunk_id IS NOT NULL
-                )
-                SELECT DISTINCT ON (parent_dc.chunk_id)
-                    parent_dc.content, 
-                    parent_dc.metadata,
-                    d.filename,
-                    dept.department_name as department,
-                    d.classification,
-                    MAX(mc.rrf_score) as rrf_score
-                FROM matched_children mc
-                JOIN document_chunks parent_dc ON mc.parent_chunk_id = parent_dc.chunk_id
-                JOIN documents d ON parent_dc.doc_id = d.doc_id
-                JOIN departments dept ON d.department_id = dept.department_id
-                GROUP BY parent_dc.chunk_id, parent_dc.content, parent_dc.metadata, 
-                         d.filename, dept.department_name, d.classification
-                ORDER BY parent_dc.chunk_id, MAX(mc.rrf_score) DESC
-                LIMIT %s;
-            """
+        chunk_type_filter = ""
+        if chunk_type:
+            chunk_type_filter = "AND dc.chunk_type = %s"
+            params.append(chunk_type)
 
-            full_params = (
-                [query_embedding]
-                + params
-                + [query_embedding, 1 - threshold, query_embedding, k + 10]
-                + [query_text, query_text]
-                + params
-                + [k + 10]
-                + [k]
-            )
-        else:
-            query_sql = f"""
-                WITH vector_search AS (
-                    SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY dc.embedding <=> %s::vector) as rank
-                    FROM document_chunks dc
-                    JOIN documents d ON dc.doc_id = d.doc_id
-                    JOIN departments dept ON d.department_id = dept.department_id
-                    WHERE ({where_sql})
-                      AND (dc.embedding <=> %s::vector) < %s
-                    ORDER BY dc.embedding <=> %s::vector
-                    LIMIT %s
-                ),
-                keyword_search AS (
-                    SELECT dc.chunk_id, ROW_NUMBER() OVER (ORDER BY ts_rank_cd(dc.searchable_text_tsvector, websearch_to_tsquery('english', %s)) DESC) as rank
-                    FROM document_chunks dc
-                    JOIN documents d ON dc.doc_id = d.doc_id
-                    JOIN departments dept ON d.department_id = dept.department_id
-                    WHERE dc.searchable_text_tsvector @@ websearch_to_tsquery('english', %s)
-                      AND ({where_sql})
-                    ORDER BY rank
-                    LIMIT %s
-                )
-                SELECT 
-                    dc.content, 
-                    dc.metadata,
-                    d.filename,
-                    dept.department_name as department,
-                    d.classification,
-                    COALESCE(1.0 / ({rrf_k} + vs.rank), 0.0) + 
-                    COALESCE(1.0 / ({rrf_k} + ks.rank), 0.0) AS rrf_score
-                FROM document_chunks dc
-                LEFT JOIN vector_search vs ON dc.chunk_id = vs.chunk_id
-                LEFT JOIN keyword_search ks ON dc.chunk_id = ks.chunk_id
-                JOIN documents d ON dc.doc_id = d.doc_id
-                JOIN departments dept ON d.department_id = dept.department_id
-                WHERE vs.chunk_id IS NOT NULL OR ks.chunk_id IS NOT NULL
-                ORDER BY rrf_score DESC
-                LIMIT %s;
-            """
+        query_sql = f"""
+            SELECT 
+                dc.chunk_id::text,
+                dc.content,
+                dc.metadata,
+                dc.chunk_type,
+                dc.parent_chunk_id::text,
+                d.filename,
+                dept.department_name,
+                d.classification,
+                ts_rank_cd(dc.searchable_text_tsvector, websearch_to_tsquery('english', %s)) as rank
+            FROM document_chunks dc
+            JOIN documents d ON dc.doc_id = d.doc_id
+            JOIN departments dept ON d.department_id = dept.department_id
+            WHERE dc.searchable_text_tsvector @@ websearch_to_tsquery('english', %s)
+              AND ({where_sql})
+              {chunk_type_filter}
+            ORDER BY rank DESC
+            LIMIT %s
+        """
 
-            full_params = (
-                [query_embedding]
-                + params
-                + [query_embedding, 1 - threshold, query_embedding, k + 10]
-                + [query_text, query_text]
-                + params
-                + [k + 10]
-                + [k]
-            )
+        full_params = [query_text, query_text] + params + [k]
 
-        results = []
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute(query_sql, full_params)
                     rows = cur.fetchall()
 
-                    if not rows:
-                        return []
+            return [
+                {
+                    "chunk_id": row["chunk_id"],
+                    "content": row["content"],
+                    "metadata": {
+                        **(row["metadata"] or {}),
+                        "source": row["filename"],
+                        "department": row["department_name"],
+                        "classification": row["classification"],
+                        "chunk_type": row["chunk_type"],
+                    },
+                    "parent_chunk_id": row["parent_chunk_id"],
+                    "rank": float(row["rank"]),
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Keyword search failed: {e}") from e
 
-                    for row in rows:
-                        metadata = {
+    def get_parent_chunk_content(self, parent_chunk_id: str) -> Optional[Dict]:
+        """Retrieve parent chunk content by ID."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT dc.chunk_id::text, dc.content, dc.metadata, 
+                           d.filename, dept.department_name, d.classification
+                    FROM document_chunks dc
+                    JOIN documents d ON dc.doc_id = d.doc_id
+                    JOIN departments dept ON d.department_id = dept.department_id
+                    WHERE dc.chunk_id = %s
+                    """,
+                    (parent_chunk_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return {
+                        "chunk_id": row["chunk_id"],
+                        "content": row["content"],
+                        "metadata": {
                             **(row["metadata"] or {}),
                             "source": row["filename"],
-                            "department": row["department"],
+                            "department": row["department_name"],
                             "classification": row["classification"],
-                            "score": round(row["rrf_score"], 4),
-                            "retrieval_type": "parent"
-                            if use_parent_retrieval
-                            else "direct",
-                        }
-                        results.append(
-                            Document(page_content=row["content"], metadata=metadata)
-                        )
+                        },
+                    }
+                return None
 
-        except Exception as e:
-            raise DatabaseError(f"Search failed: {e}") from e
+    def get_chunks_by_ids(self, chunk_ids: List[str]) -> List[Dict]:
+        """Retrieve multiple chunks by their IDs."""
+        if not chunk_ids:
+            return []
 
-        return results
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT dc.chunk_id::text, dc.content, dc.metadata, dc.chunk_type,
+                           dc.parent_chunk_id::text, d.filename, 
+                           dept.department_name, d.classification
+                    FROM document_chunks dc
+                    JOIN documents d ON dc.doc_id = d.doc_id
+                    JOIN departments dept ON d.department_id = dept.department_id
+                    WHERE dc.chunk_id = ANY(%s::uuid[])
+                    """,
+                    (chunk_ids,),
+                )
+                rows = cur.fetchall()
+
+        return [
+            {
+                "chunk_id": row["chunk_id"],
+                "content": row["content"],
+                "metadata": {
+                    **(row["metadata"] or {}),
+                    "source": row["filename"],
+                    "department": row["department_name"],
+                    "classification": row["classification"],
+                    "chunk_type": row["chunk_type"],
+                },
+                "parent_chunk_id": row["parent_chunk_id"],
+            }
+            for row in rows
+        ]
 
     def close(self):
         """Close the connection pool."""

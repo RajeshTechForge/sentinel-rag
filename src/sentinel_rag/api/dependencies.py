@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from sentinel_rag.core import SentinelEngine
 from sentinel_rag.services.database import DatabaseManager
+from sentinel_rag.services.vectorstore import QdrantStore
 from sentinel_rag.services.audit import AuditService
 from sentinel_rag.services.auth import UserContext
 from sentinel_rag.services.auth.oidc import (
@@ -56,6 +57,7 @@ class AppState:
 
     def __init__(self):
         self.db: Optional[DatabaseManager] = None
+        self.vector_store: Optional[QdrantStore] = None
         self.engine: Optional[SentinelEngine] = None
         self.audit_service: Optional[IAuditService] = None
         self.audit_pool: Optional[asyncpg.Pool] = None
@@ -70,10 +72,22 @@ class AppState:
         if self._initialized:
             return
 
-        # Initialize database and engine
+        # Initialize PostgreSQL database
         self.db = DatabaseManager(settings.database.dsn)
+
+        # Initialize Qdrant vector store
+        self.vector_store = QdrantStore(
+            host=settings.qdrant.host,
+            port=settings.qdrant.port,
+            api_key=settings.qdrant.api_key or None,
+            prefer_grpc=settings.qdrant.prefer_grpc,
+            vector_size=settings.embeddings.vector_size,
+        )
+
+        # Initialize engine with both stores
         self.engine = SentinelEngine(
             db=self.db,
+            vector_store=self.vector_store,
             rbac_config=settings.rbac.as_dict,
             max_retrieved_docs=settings.doc_retrieval.max_retrieved_docs,
             similarity_threshold=settings.doc_retrieval.similarity_threshold,
@@ -102,6 +116,10 @@ class AppState:
         if self.engine:
             self.engine.close()
             self.engine = None
+
+        if self.vector_store:
+            self.vector_store.close()
+            self.vector_store = None
 
         if self.audit_pool:
             await self.audit_pool.close()

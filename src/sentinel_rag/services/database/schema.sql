@@ -1,6 +1,5 @@
 -- Enable extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -46,21 +45,16 @@ CREATE TABLE IF NOT EXISTS documents (
     metadata JSONB
 );
 
--- Document Chunks (RAG data)
+-- Document Chunks (RAG data - vectors stored in Qdrant)
 CREATE TABLE IF NOT EXISTS document_chunks (
-    chunk_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    chunk_id UUID PRIMARY KEY,
     doc_id UUID REFERENCES documents(doc_id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     page_number INTEGER,
     chunk_index INTEGER,
-    embedding vector(1536),
+    chunk_type VARCHAR(20) DEFAULT 'child',
+    parent_chunk_id UUID REFERENCES document_chunks(chunk_id) ON DELETE CASCADE,
     searchable_text_tsvector tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
-    
-    -- -- For Parent-Document Retrieval fields
-    -- parent_chunk_id UUID REFERENCES document_chunks(chunk_id) ON DELETE CASCADE,
-    -- is_parent BOOLEAN DEFAULT FALSE,
-    -- chunk_type VARCHAR(20) DEFAULT 'child', -- 'parent' or 'child'
-    
     metadata JSONB
 );
 
@@ -70,13 +64,10 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 CREATE INDEX IF NOT EXISTS idx_chunks_fts ON document_chunks USING gin(searchable_text_tsvector);
 
 CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id);
--- CREATE INDEX IF NOT EXISTS idx_document_chunks_parent_id ON document_chunks(parent_chunk_id);
--- CREATE INDEX IF NOT EXISTS idx_document_chunks_type ON document_chunks(chunk_type, is_parent);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_parent_id ON document_chunks(parent_chunk_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_type ON document_chunks(chunk_type);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_roles_department_id ON roles(department_id);
-
--- HNSW Index for fast vector similarity search (cosine distance)
-CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks USING hnsw (embedding vector_cosine_ops);
 
 -- GIN Index for fast metadata filtering
 CREATE INDEX IF NOT EXISTS idx_documents_metadata ON documents USING GIN (metadata);

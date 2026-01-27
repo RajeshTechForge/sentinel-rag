@@ -68,17 +68,31 @@ cd sentinel-rag
 # Create a `.env` file based on example
 cp .env.example .env
 
-# Build and start all services
+# Build and start all services (PostgreSQL, Qdrant, API)
 docker compose up --build
 ```
 
-> This start sentinel-rag api on port `8000`
+> This starts:
+> - **Sentinel RAG API** on port `8000`
+> - **PostgreSQL** on port `5432`
+> - **Qdrant** on port `6333` (Dashboard: `http://localhost:6333/dashboard`)
 
 ### Local Setup
 
-Sentinel RAG utilizes [uv](https://github.com/astral-sh/uv) for high-speed dependency resolution.
+For local development without Docker. Requires external PostgreSQL and Qdrant instances.
 
-#### 1. Installation
+#### 1. Prerequisites
+
+Ensure you have:
+- **PostgreSQL** 16+ running locally
+- **Qdrant** running locally (via Docker)
+
+```bash
+docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_data:/qdrant/storage qdrant/qdrant
+
+```
+
+#### 2. Installation
 
 ```bash
 # Clone the repository
@@ -91,7 +105,7 @@ uv sync
 uv pip install -e .
 ```
 
-#### 2. Configuration
+#### 3. Configuration
 
 Create a `.env` file based on the example:
 
@@ -100,13 +114,24 @@ cp .env.example .env
 ```
 
 > [!NOTE]
-> To learn how to update configuration, refer to the [CONFIGURATION Guide](docs/CONFIGURATION.md).
+> For detailed configuration options, refer to the [CONFIGURATION Guide](docs/CONFIGURATION.md).
 
-#### 3. Launch the API
+#### 4. Launch the API
 
 ```bash
 uv run uvicorn sentinel_rag.api.app:app --reload
+```
 
+#### 5. Verify Setup
+
+Check that all services are running:
+
+```bash
+# Test API health
+curl http://localhost:8000/health
+
+# Access Qdrant Dashboard
+open http://localhost:6333/dashboard
 ```
 
 
@@ -118,7 +143,8 @@ uv run uvicorn sentinel_rag.api.app:app --reload
 | **API Framework** | FastAPI (Async) |
 | **Data Validation** | Pydantic v2 |
 | **Package Manager** | uv |
-| **Vector Search** | pgvector (PostgreSQL) |
+| **Vector Search** | Qdrant |
+| **Relational DB** | PostgreSQL |
 | **Orchestration** | Docker & Docker Compose |
 
 

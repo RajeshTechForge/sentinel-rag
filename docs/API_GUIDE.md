@@ -1,6 +1,6 @@
 <div align="center">
 
-## Sentinel RAG API - User Guide
+# Sentinel RAG API - User Guide
 
 </div>
 

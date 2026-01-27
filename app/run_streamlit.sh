@@ -29,6 +29,12 @@ fi
 
 echo "Using uv package manager..."
 
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo "⚠️  Docker not found. Please install Docker first."
+    exit 1
+fi
+
 # Check if PostgreSQL is running
 echo "Checking PostgreSQL connection..."
 if command -v pg_isready &> /dev/null; then
@@ -38,9 +44,46 @@ if command -v pg_isready &> /dev/null; then
     fi
 fi
 
+# Check if Qdrant is running
+echo "Checking Qdrant connection..."
+QDRANT_CONTAINER="qdrant"
+QDRANT_RUNNING=$(docker ps --filter "name=$QDRANT_CONTAINER" --filter "status=running" -q)
+
+if [ -z "$QDRANT_RUNNING" ]; then
+    echo "⚠️  Qdrant is not running. Starting Qdrant container..."
+    
+    # Check if container exists but is stopped
+    QDRANT_EXISTS=$(docker ps -a --filter "name=$QDRANT_CONTAINER" -q)
+    
+    if [ -n "$QDRANT_EXISTS" ]; then
+        echo "   Restarting existing Qdrant container..."
+        docker start $QDRANT_CONTAINER
+    else
+        echo "   Creating new Qdrant container..."
+        docker run -d --name $QDRANT_CONTAINER \
+            -p 6333:6333 -p 6334:6334 \
+            -v "$(pwd)/qdrant_data:/qdrant/storage" \
+            qdrant/qdrant
+    fi
+    
+    # Wait for Qdrant to be ready
+    echo "   Waiting for Qdrant to start..."
+    sleep 3
+    
+    # Verify Qdrant is running
+    if curl -s http://localhost:6333/readyz > /dev/null 2>&1; then
+        echo "✅ Qdrant is now running on port 6333"
+    else
+        echo "⚠️  Qdrant may not be fully ready. Please check manually."
+    fi
+else
+    echo "✅ Qdrant is already running"
+fi
+
 echo ""
 echo "🚀 Launching Streamlit Interface..."
 echo "📍 Access at: http://localhost:8501"
+echo "📊 Qdrant Dashboard: http://localhost:6333/dashboard"
 echo ""
 
 # Run streamlit using uv (automatically handles dependencies and virtual env)
