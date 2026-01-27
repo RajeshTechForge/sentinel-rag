@@ -4,44 +4,119 @@
     "APP_ENV": "development",
     "DEBUG": "false",
     "ENABLE_AUDIT_LOGGING": "false",
-
-    "DOC_RETRIEVAL_SETTINGS" : {
+    "DOC_RETRIEVAL_SETTINGS": {
         "max_retrieved_docs": 20,
         "similarity_threshold": 0.4,
-        "rrf_constant": 60
+        "rrf_constant": 60,
+        "use_parent_retrieval": true,
+        "parent_chunk_size": 2000,
+        "parent_chunk_overlap": 200,
+        "child_chunk_size": 400,
+        "child_chunk_overlap": 50
     },
-
-    "DEPARTMENTS": ["finance", "hr", "engineering", "sales", "marketing"],
-
+    "DEPARTMENTS": [
+        "finance",
+        "hr",
+        "engineering",
+        "sales",
+        "marketing"
+    ],
     "ROLES": {
-        "finance": ["accountant", "financial_analyst", "finance_manager"],
-        "hr": ["recruiter", "hr_manager", "hr_director"],
-        "engineering": ["intern", "engineer", "senior_engineer", "engineering_manager"],
-        "sales": ["sales_representative", "sales_manager", "sales_director"],
-        "marketing": ["marketing_coordinator", "marketing_manager", "marketing_director"]
+        "finance": [
+            "accountant",
+            "financial_analyst",
+            "finance_manager"
+        ],
+        "hr": [
+            "recruiter",
+            "hr_manager",
+            "hr_director"
+        ],
+        "engineering": [
+            "intern",
+            "engineer",
+            "senior_engineer",
+            "engineering_manager"
+        ],
+        "sales": [
+            "sales_representative",
+            "sales_manager",
+            "sales_director"
+        ],
+        "marketing": [
+            "marketing_coordinator",
+            "marketing_manager",
+            "marketing_director"
+        ]
     },
-    
     "ACCESS_MATRIX": {
         "public": {
-            "finance": ["accountant", "financial_analyst", "finance_manager"],
-            "hr": ["recruiter", "hr_manager", "hr_director"],
-            "engineering": ["intern", "engineer", "senior_engineer", "engineering_manager"],
-            "sales": ["sales_representative", "sales_manager", "sales_director"],
-            "marketing": ["marketing_coordinator", "marketing_manager", "marketing_director"]
+            "finance": [
+                "accountant",
+                "financial_analyst",
+                "finance_manager"
+            ],
+            "hr": [
+                "recruiter",
+                "hr_manager",
+                "hr_director"
+            ],
+            "engineering": [
+                "intern",
+                "engineer",
+                "senior_engineer",
+                "engineering_manager"
+            ],
+            "sales": [
+                "sales_representative",
+                "sales_manager",
+                "sales_director"
+            ],
+            "marketing": [
+                "marketing_coordinator",
+                "marketing_manager",
+                "marketing_director"
+            ]
         },
         "internal": {
-            "finance": ["financial_analyst", "finance_manager"],
-            "hr": ["hr_manager", "hr_director"],
-            "engineering": ["engineer", "senior_engineer", "engineering_manager"],
-            "sales": ["sales_manager", "sales_director"],
-            "marketing": ["marketing_manager", "marketing_director"]
+            "finance": [
+                "financial_analyst",
+                "finance_manager"
+            ],
+            "hr": [
+                "hr_manager",
+                "hr_director"
+            ],
+            "engineering": [
+                "engineer",
+                "senior_engineer",
+                "engineering_manager"
+            ],
+            "sales": [
+                "sales_manager",
+                "sales_director"
+            ],
+            "marketing": [
+                "marketing_manager",
+                "marketing_director"
+            ]
         },
         "confidential": {
-            "finance": ["finance_manager"],
-            "hr": ["hr_director"],
-            "engineering": ["engineering_manager"],
-            "sales": ["sales_director"],
-            "marketing": ["marketing_director"]
+            "finance": [
+                "finance_manager"
+            ],
+            "hr": [
+                "hr_director"
+            ],
+            "engineering": [
+                "engineering_manager"
+            ],
+            "sales": [
+                "sales_director"
+            ],
+            "marketing": [
+                "marketing_director"
+            ]
         }
     }
 }

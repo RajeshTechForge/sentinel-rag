@@ -71,12 +71,16 @@ class SentinelEngine:
         user_id: str,
         department_id: str,
         classification: str,
-        use_hierarchical: bool = True,
+        use_hierarchical: bool = None,
     ):
         """Uploads documents from path or UploadFile, splits them, generates embeddings and stores in DB."""
 
         doc_content = []
         tmp_path = None
+
+        if use_hierarchical is None:
+            settings = get_settings()
+            use_hierarchical = settings.doc_retrieval.use_parent_retrieval
 
         try:
             if isinstance(source, str):
@@ -213,8 +217,13 @@ class SentinelEngine:
         classification: str,
     ) -> str:
         """Hierarchical parent-document chunking and ingestion."""
+        settings = get_settings()
         chunk_data = self.doc_processor.create_context_aware_hierarchical_chunks(
-            doc_content
+            doc_content,
+            parent_chunk_size=settings.doc_retrieval.parent_chunk_size,
+            parent_overlap=settings.doc_retrieval.parent_chunk_overlap,
+            child_chunk_size=settings.doc_retrieval.child_chunk_size,
+            child_overlap=settings.doc_retrieval.child_chunk_overlap,
         )
         parent_chunks = chunk_data["parent_chunks"]
         child_chunks = chunk_data["child_chunks"]
