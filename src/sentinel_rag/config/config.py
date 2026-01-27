@@ -57,7 +57,7 @@ class QdrantSettings(BaseSettings):
     host: str = "localhost"
     port: int = 6333
     api_key: str = ""
-    prefer_grpc: bool = True
+    prefer_grpc: bool = False  # Default to HTTP for better compatibility
 
 
 class OIDCSettings(BaseSettings):

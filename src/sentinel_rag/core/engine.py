@@ -55,6 +55,7 @@ class SentinelEngine:
                 host=settings.qdrant.host,
                 port=settings.qdrant.port,
                 api_key=settings.qdrant.api_key or None,
+                prefer_grpc=settings.qdrant.prefer_grpc,
                 vector_size=settings.embeddings.vector_size,
             )
 
