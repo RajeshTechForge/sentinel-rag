@@ -122,6 +122,7 @@ class AuditSettings(BaseSettings):
 class RBACSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="allow")
 
+    permission_levels: list[str] = Field(default_factory=list)
     departments: list[str] = Field(default_factory=list)
     roles: dict[str, list[str]] = Field(default_factory=dict)
     access_matrix: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
@@ -129,6 +130,7 @@ class RBACSettings(BaseSettings):
     @property
     def as_dict(self) -> dict:
         return {
+            "permission_levels": self.permission_levels,
             "departments": self.departments,
             "roles": self.roles,
             "access_matrix": self.access_matrix,
@@ -240,6 +242,7 @@ class AppSettings(BaseSettings):
             )
 
             # Load RBAC configuration
+            self.rbac.permission_levels = json_config.get("PERMISSION_LEVELS", [])
             self.rbac.departments = json_config.get("DEPARTMENTS", [])
             self.rbac.roles = json_config.get("ROLES", {})
             self.rbac.access_matrix = json_config.get("ACCESS_MATRIX", {})

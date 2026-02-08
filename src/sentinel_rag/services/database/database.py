@@ -71,12 +71,12 @@ class DatabaseManager:
     # ─────────────────────────────────────────────
     #              User Management
     # ─────────────────────────────────────────────
-    def create_user(self, email: str, full_name: str = None) -> str:
+    def create_user(self, email: str, full_name: str, permission_level_id: str) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO users (email, full_name) VALUES (%s, %s) RETURNING user_id",
-                    (email, full_name),
+                    "INSERT INTO users (email, full_name, permission_level_id) VALUES (%s, %s, %s) RETURNING user_id",
+                    (email, full_name, permission_level_id),
                 )
                 user_id = cur.fetchone()[0]
             conn.commit()
@@ -122,6 +122,32 @@ class DatabaseManager:
     # ─────────────────────────────────────────────
     #             RBAC Management
     # ─────────────────────────────────────────────
+
+    def create_permission_level(self, permission_level_name: str) -> str:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO permission_levels (permission_level_name) VALUES (%s) ON CONFLICT (permission_level_name) DO NOTHING RETURNING permission_level_id",
+                    (permission_level_name,),
+                )
+                res = cur.fetchone()
+                if not res:
+                    # If it existed, we need to fetch it
+                    cur.execute(
+                        "SELECT permission_level_id FROM permission_levels WHERE permission_level_name = %s",
+                        (permission_level_name,),
+                    )
+                    permission_level_id = cur.fetchone()[0]
+                else:
+                    permission_level_id = res[0]
+            conn.commit()
+        return str(permission_level_id)
+    
+    def get_all_permission_levels(self) -> List[str]:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT permission_level_name FROM permission_levels")
+                return [row[0] for row in cur.fetchall()]
 
     def create_access_level(self, access_level_name: str) -> str:
         with self._get_connection() as conn:

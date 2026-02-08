@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS roles (
     UNIQUE(role_name, department_id)
 );
 
+CREATE TABLE IF NOT EXISTS permission_levels (
+    permission_level_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    permission_level_name VARCHAR(50) UNIQUE NOT NULL -- 'user', 'depertment-admin', 'admin', 'super-admin'
+);
+
 CREATE TABLE IF NOT EXISTS access_levels (
     access_level_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     access_level_name VARCHAR(50) UNIQUE NOT NULL -- 'public', 'internal', 'confidential'
@@ -31,6 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     full_name VARCHAR(100),
+    permission_level_id UUID REFERENCES permission_levels(permission_level_id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
