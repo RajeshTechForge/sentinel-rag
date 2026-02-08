@@ -15,7 +15,8 @@ def seed_initial_data(db=None, rbac_config: Dict = None):
 
     rbac_config = rbac_config or {}
 
-    # Seed departments
+    #     Seed Departments
+    # ---------------------------
     existing_depts = set(db.get_all_departments())
     new_depts = [
         d for d in rbac_config.get("departments", []) if d not in existing_depts
@@ -27,7 +28,8 @@ def seed_initial_data(db=None, rbac_config: Dict = None):
         except Exception as e:
             raise SeederError(f"Failed to create department '{dept_name}': {e}") from e
 
-    # Seed roles
+    #       Seed Roles
+    # ---------------------------
     existing_roles = {
         (r["role_name"], r["department_name"]) for r in db.get_all_roles()
     }
@@ -42,3 +44,32 @@ def seed_initial_data(db=None, rbac_config: Dict = None):
                     raise SeederError(
                         f"Failed to create role '{role_name}' in '{dept_name}': {e}"
                     ) from e
+
+    #    Seed Access Levels
+    # -------------------------------
+    access_matrix = rbac_config.get("access_matrix", {})
+    existing_levels = set(db.get_all_access_levels())
+
+    for level_name in access_matrix.keys():
+        if level_name not in existing_levels:
+            try:
+                db.create_access_level(level_name)
+            except Exception as e:
+                raise SeederError(
+                    f"Failed to create access level '{level_name}': {e}"
+                ) from e
+
+    #    Seed Role Access
+    # -------------------------------
+    existing_access = set(db.get_all_role_access())
+
+    for level_name, departments in access_matrix.items():
+        for department_name, roles in departments.items():
+            for role_name in roles:
+                if (role_name, department_name, level_name) not in existing_access:
+                    try:
+                        db.assign_role_access(role_name, department_name, level_name)
+                    except Exception as e:
+                        raise SeederError(
+                            f"Failed to assign access '{level_name}' to role '{role_name}' in '{department_name}': {e}"
+                        ) from e

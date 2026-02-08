@@ -69,7 +69,7 @@ class DatabaseManager:
             print("Database tables initialized.")
 
     # ─────────────────────────────────────────────
-    #                User Management
+    #              User Management
     # ─────────────────────────────────────────────
     def create_user(self, email: str, full_name: str = None) -> str:
         with self._get_connection() as conn:
@@ -94,7 +94,7 @@ class DatabaseManager:
                 cur.execute(
                     """
                     SELECT d.department_name, r.role_name
-                    FROM user_access ua
+                    FROM user_position ua
                     JOIN roles r ON ua.role_id = r.role_id
                     JOIN departments d ON ua.department_id = d.department_id
                     WHERE ua.user_id = %s
@@ -116,6 +116,93 @@ class DatabaseManager:
                     ORDER BY d.created_at DESC
                     """,
                     (user_id,),
+                )
+                return cur.fetchall()
+
+    # ─────────────────────────────────────────────
+    #             RBAC Management
+    # ─────────────────────────────────────────────
+
+    def create_access_level(self, access_level_name: str) -> str:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO access_levels (access_level_name) VALUES (%s) ON CONFLICT (access_level_name) DO NOTHING RETURNING access_level_id",
+                    (access_level_name,),
+                )
+                res = cur.fetchone()
+                if not res:
+                    # If it existed, we need to fetch it
+                    cur.execute(
+                        "SELECT access_level_id FROM access_levels WHERE access_level_name = %s",
+                        (access_level_name,),
+                    )
+                    access_level_id = cur.fetchone()[0]
+                else:
+                    access_level_id = res[0]
+            conn.commit()
+        return str(access_level_id)
+
+    def get_all_access_levels(self) -> List[str]:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT access_level_name FROM access_levels")
+                return [row[0] for row in cur.fetchall()]
+
+    def assign_role_access(
+        self, role_name: str, department_name: str, access_level_name: str
+    ):
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Get role_id
+                cur.execute(
+                    """
+                    SELECT r.role_id 
+                    FROM roles r 
+                    JOIN departments d ON r.department_id = d.department_id 
+                    WHERE r.role_name = %s AND d.department_name = %s
+                """,
+                    (role_name, department_name),
+                )
+                role_res = cur.fetchone()
+                if not role_res:
+                    raise ValueError(
+                        f"Role '{role_name}' in department '{department_name}' not found"
+                    )
+                role_id = role_res[0]
+
+                # Get access_level_id
+                cur.execute(
+                    "SELECT access_level_id FROM access_levels WHERE access_level_name = %s",
+                    (access_level_name,),
+                )
+                access_res = cur.fetchone()
+                if not access_res:
+                    raise ValueError(f"Access level '{access_level_name}' not found")
+                access_level_id = access_res[0]
+
+                # Insert
+                cur.execute(
+                    """
+                    INSERT INTO role_access (role_id, access_level_id) 
+                    VALUES (%s, %s) 
+                    ON CONFLICT (role_id, access_level_id) DO NOTHING
+                """,
+                    (role_id, access_level_id),
+                )
+            conn.commit()
+
+    def get_all_role_access(self) -> List[tuple]:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT r.role_name, d.department_name, a.access_level_name
+                    FROM role_access ra
+                    JOIN roles r ON ra.role_id = r.role_id
+                    JOIN departments d ON r.department_id = d.department_id
+                    JOIN access_levels a ON ra.access_level_id = a.access_level_id
+                """
                 )
                 return cur.fetchall()
 
@@ -146,7 +233,7 @@ class DatabaseManager:
                     """
                     SELECT DISTINCT d.department_name 
                     FROM departments d 
-                    JOIN user_access ua ON d.department_id = ua.department_id 
+                    JOIN user_position ua ON d.department_id = ua.department_id 
                     WHERE ua.user_id = %s
                     """,
                     (user_id,),
@@ -242,7 +329,7 @@ class DatabaseManager:
 
                 cur.execute(
                     """
-                    INSERT INTO user_access (user_id, department_id, role_id) 
+                    INSERT INTO user_position (user_id, department_id, role_id) 
                     VALUES (%s, %s, %s) ON CONFLICT DO NOTHING
                     """,
                     (user_id, department_id, role_id),

@@ -42,7 +42,7 @@ class SentinelEngine:
     ):
         self.db = db
         seed_initial_data(db=self.db, rbac_config=rbac_config or {})
-        self.rbac = RbacManager(rbac_config or {})
+        self.rbac = RbacManager(self.db)
         self.pii_manager = PiiManager()
         self.doc_processor = DocumentProcessor()
 
@@ -351,7 +351,7 @@ class SentinelEngine:
             List of Document objects with content and metadata.
         """
         try:
-            filters = self.rbac.get_user_access_filters(user_id, self.db)
+            filters = self.rbac.get_user_access_filters(user_id)
             if not filters:
                 return []
 

@@ -1,20 +1,14 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table
-CREATE TABLE IF NOT EXISTS users (
-    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    full_name VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- ========================================================
+--             User and RBAC Management
+-- ========================================================
 
--- Department table
 CREATE TABLE IF NOT EXISTS departments (
     department_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     department_name VARCHAR(50) UNIQUE NOT NULL
 );
 
--- Roles table
 CREATE TABLE IF NOT EXISTS roles (
     role_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     role_name VARCHAR(50) NOT NULL,
@@ -22,14 +16,35 @@ CREATE TABLE IF NOT EXISTS roles (
     UNIQUE(role_name, department_id)
 );
 
--- User Access mapping (Merged Departments and Roles)
-CREATE TABLE IF NOT EXISTS user_access (
+CREATE TABLE IF NOT EXISTS access_levels (
+    access_level_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    access_level_name VARCHAR(50) UNIQUE NOT NULL -- 'public', 'internal', 'confidential'
+);
+
+CREATE TABLE IF NOT EXISTS role_access (
+    role_id UUID REFERENCES roles(role_id),
+    access_level_id UUID REFERENCES access_levels(access_level_id),
+    PRIMARY KEY (role_id, access_level_id)
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    full_name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_position (
     user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
     department_id UUID REFERENCES departments(department_id) ON DELETE CASCADE,
     role_id UUID REFERENCES roles(role_id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, department_id, role_id)
 );
+
+-- ======================================================
+--               Document Management
+-- ======================================================
 
 -- Documents metadata
 CREATE TABLE IF NOT EXISTS documents (

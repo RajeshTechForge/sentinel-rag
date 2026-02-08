@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     log_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
-    -- Actor information (denormalized - no FK to users table)
     user_id UUID,                         -- Reference only, no FK constraint
     user_email VARCHAR(255),              -- Denormalized for data retention
     session_id VARCHAR(255),  -- For tracking user sessions
