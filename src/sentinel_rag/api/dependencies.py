@@ -4,7 +4,6 @@ using FastAPI.
 
 """
 
-import asyncpg
 from contextlib import asynccontextmanager
 from typing import Annotated, Optional, Protocol
 from fastapi import Depends, HTTPException, Request, status
@@ -12,7 +11,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sentinel_rag.core import SentinelEngine
 from sentinel_rag.services.database import DatabaseManager
 from sentinel_rag.services.vectorstore import QdrantStore
-from sentinel_rag.services.audit import AuditService
+from sentinel_rag.services.audit import AuditService, AuditDatabaseManager
 from sentinel_rag.services.auth import UserContext
 from sentinel_rag.services.auth.oidc import (
     get_current_active_user as _get_current_active_user,
@@ -60,7 +59,7 @@ class AppState:
         self.vector_store: Optional[QdrantStore] = None
         self.engine: Optional[SentinelEngine] = None
         self.audit_service: Optional[IAuditService] = None
-        self.audit_pool: Optional[asyncpg.Pool] = None
+        self.audit_db: Optional[AuditDatabaseManager] = None
         self._initialized: bool = False
 
     @property
@@ -96,16 +95,15 @@ class AppState:
 
         # Initialize audit service
         if settings.audit.enabled:
-            self.audit_pool = await asyncpg.create_pool(
-                host=settings.database.host,
-                port=settings.database.port,
-                database=settings.database.database,
-                user=settings.database.user,
-                password=settings.database.password,
-                min_size=settings.database.min_pool_size,
-                max_size=settings.database.max_pool_size,
+            audit_dsn = settings.audit_database.get_effective_dsn(settings.database)
+
+            self.audit_db = AuditDatabaseManager(
+                database_url=audit_dsn,
+                min_pool_size=settings.audit_database.min_pool_size,
+                max_pool_size=settings.audit_database.max_pool_size,
             )
-            self.audit_service = AuditService(self.audit_pool)
+            await self.audit_db.initialize()
+            self.audit_service = AuditService(self.audit_db.pool)
         else:
             self.audit_service = MockAuditService()
 
@@ -121,9 +119,9 @@ class AppState:
             self.vector_store.close()
             self.vector_store = None
 
-        if self.audit_pool:
-            await self.audit_pool.close()
-            self.audit_pool = None
+        if self.audit_db:
+            await self.audit_db.close()
+            self.audit_db = None
 
         self.db = None
         self.audit_service = None

@@ -1,3 +1,4 @@
+from .audit_database import AuditDatabaseManager
 from .audit_middleware import AuditLoggingMiddleware
 from .audit_service import AuditService, extract_client_info
 from .schemas import (
@@ -11,6 +12,7 @@ from .schemas import (
 )
 
 __all__ = [
+    "AuditDatabaseManager",
     "AuditLoggingMiddleware",
     "AuditService",
     "AuditLogEntry",

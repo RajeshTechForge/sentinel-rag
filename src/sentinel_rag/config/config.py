@@ -30,6 +30,31 @@ class DatabaseSettings(BaseSettings):
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
+class AuditDatabaseSettings(BaseSettings):
+    # If use_separate_db is True, uses the audit-specific connection params.
+
+    model_config = SettingsConfigDict(env_prefix="AUDIT_POSTGRES_")
+
+    use_separate_db: bool = Field(default=False, alias="AUDIT_USE_SEPARATE_DB")
+    host: str = Field(default="localhost")
+    port: int = Field(default=5432)
+    database: str = Field(default="audit_db", alias="AUDIT_POSTGRES_DB")
+    user: str = Field(default="postgres")
+    password: str = Field(default="")
+    min_pool_size: int = Field(default=2, ge=1, le=20)
+    max_pool_size: int = Field(default=10, ge=5, le=100)
+
+    @property
+    def dsn(self) -> str:
+        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+    def get_effective_dsn(self, main_db: DatabaseSettings) -> str:
+        # If use_separate_db is False, returns the main database DSN.
+        if not self.use_separate_db:
+            return main_db.dsn
+        return self.dsn
+
+
 class DocRetrievalSettings(BaseSettings):
     max_retrieved_docs: int = Field(default=20, ge=1, le=100)
     similarity_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
@@ -146,6 +171,7 @@ class AppSettings(BaseSettings):
     debug: bool = True
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    audit_database: AuditDatabaseSettings = Field(default_factory=AuditDatabaseSettings)
     qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
     doc_retrieval: DocRetrievalSettings = Field(default_factory=DocRetrievalSettings)
     embeddings: EmbeddingSettings = Field(default_factory=EmbeddingSettings)

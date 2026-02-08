@@ -153,6 +153,7 @@ open http://localhost:6333/dashboard
 - [API Guide](docs/API_GUIDE.md)
 - [CONFIGURATION Guide](docs/CONFIGURATION.md)
 - [COMPLIANCE Guide](docs/COMPLIANCE.md)
+- [DATABASE SEPARATION Guide](docs/DATABASE_SEPARATION.md)
 - [EMBEDDINGS Guide](docs/EMBEDDINGS_GUIDE.md)
 - [CONTRIBUTING Guidelines](CONTRIBUTING.md)
 
