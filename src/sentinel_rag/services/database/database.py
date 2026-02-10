@@ -81,6 +81,21 @@ class DatabaseManager:
                 user_id = cur.fetchone()[0]
             conn.commit()
         return str(user_id)
+    
+    def get_user_permission_level(self, user_id: str) -> Optional[str]:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT pl.permission_level_name 
+                    FROM users u 
+                    JOIN permission_levels pl ON u.permission_level_id = pl.permission_level_id
+                    WHERE u.user_id = %s
+                    """,
+                    (user_id,),
+                )
+                res = cur.fetchone()
+                return res[0] if res else None
 
     def get_user_by_email(self, email: str) -> Optional[Dict]:
         with self._get_connection() as conn:

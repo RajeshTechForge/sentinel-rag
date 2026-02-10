@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .dependencies import get_app_state, app_lifespan
 from .exception_handlers import register_exception_handlers
-from .routes import api_router, auth_router_root, health_router_root
+from .routes import api_router, auth_router_root, health_router_root, admin_router_root
 
 from sentinel_rag.config import get_settings
 from sentinel_rag.services.audit import AuditLoggingMiddleware
@@ -52,6 +52,7 @@ def create_application() -> FastAPI:
     app.include_router(health_router_root)
     app.include_router(auth_router_root)
     app.include_router(api_router)
+    app.include_router(admin_router_root)
 
     return app
 
