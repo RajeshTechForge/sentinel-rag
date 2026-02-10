@@ -16,9 +16,7 @@
     },
     "PERMISSION_LEVELS": [
         "user",
-        "department-admin",
-        "admin",
-        "super-admin"
+        "admin"
     ],
     "DEPARTMENTS": [
         "finance",
