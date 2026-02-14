@@ -44,6 +44,20 @@ def seed_initial_data(db=None, rbac_config: Dict = None):
                     raise SeederError(
                         f"Failed to create role '{role_name}' in '{dept_name}': {e}"
                     ) from e
+                
+    #    Seed Permission Levels
+    # -------------------------------
+    permission_levels = rbac_config.get("permission_levels", [])
+    existing_permission_levels = set(db.get_all_permission_levels())
+
+    for level_name in permission_levels:
+        if level_name not in existing_permission_levels:
+            try:
+                db.create_permission_level(level_name)
+            except Exception as e:
+                raise SeederError(
+                    f"Failed to create permission level '{level_name}': {e}"
+                ) from e
 
     #    Seed Access Levels
     # -------------------------------
