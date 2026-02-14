@@ -19,11 +19,29 @@ class TimestampMixin(BaseModel):
 # ---------------------------
 
 
+class UserCreateRequest(BaseSchema):
+    user_full_name: str
+    user_email: EmailStr
+    user_role: str
+    user_department: str
+    user_type: Optional[str] = "user"
+
+
 class UserResponse(BaseSchema):
     user_id: UUID
     user_email: EmailStr
     user_role: str
     user_department: str
+
+
+class UserDetailResponse(BaseSchema):
+    user_id: UUID
+    user_email: EmailStr
+    user_full_name: str
+    user_role: str
+    user_department: str
+    permission_level: str
+    created_at: Optional[datetime] = None
 
 
 #           DOCUMENT

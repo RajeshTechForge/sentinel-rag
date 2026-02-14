@@ -1,6 +1,8 @@
 """
 Admin API routes for system management and monitoring.
 
+- Audit logging not implemented yet !!!
+
 Provides endpoints for:
 - Audit log access
 - User management
@@ -19,6 +21,7 @@ from sentinel_rag.api.dependencies import (
     get_current_active_user,
 )
 from sentinel_rag.services.auth import UserContext
+from sentinel_rag.api.schemas import UserCreateRequest, UserDetailResponse
 
 
 router = APIRouter()
@@ -64,6 +67,85 @@ async def list_all_users(
     pass
 
 
+@router.post("/users/create", response_model=UserDetailResponse)
+async def create_user(
+    user_data: UserCreateRequest,
+    db: DatabaseDep,
+    admin: UserContext = AdminUserDep,
+):
+    """
+    Create a new user in the system.
+    Returns the created user's info including ID, email, role, department, permission level.
+    """
+    # Validate informations
+    all_departments = db.get_all_departments()
+    if user_data.user_department not in all_departments:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid department '{user_data.user_department}'. Valid departments: {', '.join(all_departments)}",
+        )
+
+    department_roles = db.get_roles_by_department(user_data.user_department)
+    if user_data.user_role not in department_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role '{user_data.user_role}' for department '{user_data.user_department}'. Valid roles: {', '.join(department_roles)}",
+        )
+
+    all_permission_levels = db.get_all_permission_levels()
+    if user_data.user_type not in all_permission_levels:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid permission level '{user_data.user_type}'. Valid levels: {', '.join(all_permission_levels)}",
+        )
+
+    # Check if user already exists
+    existing_user = db.get_user_by_email(user_data.user_email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"User with email '{user_data.user_email}' already exists",
+        )
+
+    try:
+        permission_level_id = db.create_permission_level(user_data.user_type)
+
+        user_id = db.create_user(
+            email=user_data.user_email,
+            full_name=user_data.user_full_name,
+            permission_level_id=permission_level_id,
+        )
+
+        db.assign_role(
+            user_id=user_id,
+            role_name=user_data.user_role,
+            department_name=user_data.user_department,
+        )
+
+        created_user = db.get_user_by_email(user_data.user_email)
+
+        return UserDetailResponse(
+            user_id=created_user["user_id"],
+            user_email=created_user["email"],
+            user_full_name=created_user["full_name"],
+            user_role=user_data.user_role,
+            user_department=user_data.user_department,
+            permission_level=user_data.user_type,
+            created_at=created_user.get("created_at"),
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create user: {str(e)}",
+        )
+
+
 @router.get("/users/{user_id}")
 async def get_user_details(
     user_id: str,
@@ -106,6 +188,7 @@ async def get_audit_logs(
     - Date range
     """
     pass
+
 
 @router.get("/audit-logs/stats")
 async def get_audit_stats(
