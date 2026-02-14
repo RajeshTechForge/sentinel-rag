@@ -1,6 +1,7 @@
 """
 OpenID Connect (OIDC) authentication service.
 Handles token creation, verification, and user context extraction.
+Supports both user-based OIDC tokens and M2M client credential tokens.
 
 """
 
@@ -22,26 +23,33 @@ def create_access_token(
     data: dict,
     settings: AppSettings,
     expires_delta: Optional[timedelta] = None,
+    is_m2m: bool = False,
 ):
     """
     Create a JWT access token with the provided data.
 
     Args:
-        data: Payload to encode in the token
+        data: Payload to encode in the token (user_id, email, tenant_id, role, department)
         settings: Application settings containing security configuration
         expires_delta: Optional custom expiration time
+        is_m2m: Flag indicating if this is an M2M token
 
     Returns:
         Encoded JWT token as string
     """
     to_encode = data.copy()
+
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.security.access_token_expire_minutes
+        default_minutes = (
+            settings.security.access_token_expire_minutes * 60  # 60x longer for M2M
+            if is_m2m
+            else settings.security.access_token_expire_minutes
         )
-    to_encode.update({"exp": expire})
+        expire = datetime.now(timezone.utc) + timedelta(minutes=default_minutes)
+
+    to_encode.update({"exp": expire, "is_m2m": is_m2m})
 
     encoded_jwt = jwt.encode(
         {"alg": settings.security.algorithm}, to_encode, settings.security.secret_key
@@ -52,6 +60,7 @@ def create_access_token(
 def verify_token(token: str, settings: AppSettings) -> UserContext:
     """
     Verify and decode a JWT access token.
+    Works for both user OIDC tokens and M2M client credential tokens.
 
     Args:
         token: JWT token to verify
@@ -74,8 +83,8 @@ def verify_token(token: str, settings: AppSettings) -> UserContext:
             role=claims["role"],
             department=claims["department"],
         )
-    except (JoseError, KeyError):
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except (JoseError, KeyError) as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 
 # --- Dependency ---
