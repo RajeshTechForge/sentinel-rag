@@ -1,14 +1,15 @@
 """
 This module defines the authentication routes for FastAPI.
 
-- Includes endpoints for user login, OIDC callback handling and logout.
-- Audit logging is integrated
+- Includes endpoints for user login, OIDC callback handling, logout, and M2M token generation.
+- Supports both browser-based OIDC flow and programmatic client credentials flow.
+- Audit logging is integrated for all authentication events.
 
 """
 
 import secrets
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Request, HTTPException, Response
+from fastapi import APIRouter, Request, HTTPException, Response, Form
 from fastapi.responses import RedirectResponse
 from authlib.jose import jwt
 
@@ -17,11 +18,19 @@ from sentinel_rag.api.dependencies import (
     RequestContextDep,
     AuditServiceDep,
     SettingsDep,
+    CurrentUserDep,
 )
 from sentinel_rag.services.auth import (
     TenantConfig,
     register_tenant_client,
     create_access_token,
+    TokenResponse,
+    authenticate_m2m_client,
+    M2MClientCreate,
+    M2MClientCreated,
+    M2MClientInfo,
+    generate_client_secret,
+    hash_client_secret,
 )
 from sentinel_rag.services.audit import (
     AuditLogEntry,
@@ -118,6 +127,140 @@ async def login(request: Request, settings: SettingsDep):
         raise HTTPException(
             status_code=500,
             detail=f"OIDC authorization failed: {error_msg}",
+        )
+
+
+@router.post("/token", response_model=TokenResponse)
+async def token(
+    grant_type: str = Form(...),
+    client_id: str = Form(...),
+    client_secret: str = Form(...),
+    scope: str = Form(None),
+    context: RequestContextDep = None,
+    audit: AuditServiceDep = None,
+    db: DatabaseDep = None,
+    settings: SettingsDep = None,
+):
+    """
+    OAuth2 token endpoint for M2M (Machine-to-Machine) authentication.
+    
+    Supports the client_credentials grant type for programmatic API access.
+    Desktop apps, CLIs, and services use this endpoint to obtain access tokens.
+    
+    Args:
+        grant_type: Must be "client_credentials"
+        client_id: M2M client ID (UUID)
+        client_secret: M2M client secret (generated during client creation)
+        scope: Optional space-separated scopes (currently not enforced)
+        
+    Returns:
+        TokenResponse with access_token and metadata
+        
+    Example:
+        ```bash
+        curl -X POST https://api.example.com/auth/token \\
+          -d "grant_type=client_credentials" \\
+          -d "client_id=<your-client-id>" \\
+          -d "client_secret=<your-client-secret>"
+        ```
+    """
+    # Validate grant type
+    if grant_type != "client_credentials":
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported grant_type. Only 'client_credentials' is supported.",
+        )
+
+    try:
+        # Authenticate the M2M client
+        user_id, email, role, department, authenticated_client_id = (
+            authenticate_m2m_client(
+                client_id=client_id,
+                client_secret=client_secret,
+                db=db,
+                tenant_id=settings.tenant.tenant_id,
+            )
+        )
+
+        # Create M2M access token (longer expiration)
+        access_token_expires = timedelta(days=30)  # M2M tokens valid for 30 days
+        access_token = create_access_token(
+            data={
+                "sub": email,
+                "user_id": user_id,
+                "tenant_id": settings.tenant.tenant_id,
+                "role": role,
+                "department": department,
+                "client_id": authenticated_client_id,
+                "scopes": scope.split() if scope else [],
+            },
+            settings=settings,
+            expires_delta=access_token_expires,
+            is_m2m=True,
+        )
+
+        # Log successful M2M authentication
+        main_entry = AuditLogEntry(
+            user_id=user_id,
+            user_email=email,
+            ip_address=context.client_ip,
+            user_agent=context.user_agent,
+            session_id=context.session_id,
+            event_category=EventCategory.AUTHENTICATION,
+            event_type="m2m_token_success",
+            action=Action.LOGIN,
+            outcome=EventOutcome.SUCCESS,
+            metadata={"client_id": authenticated_client_id, "grant_type": grant_type},
+        )
+        log_id = await audit.log(main_entry)
+
+        auth_entry = AuthAuditEntry(
+            user_id=user_id,
+            email=email,
+            auth_method="client_credentials",
+            event_type="m2m_token_success",
+            ip_address=context.client_ip,
+            user_agent=context.user_agent,
+        )
+        await audit.log_auth(log_id, auth_entry)
+
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=int(access_token_expires.total_seconds()),
+            scope=scope,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Log failed M2M authentication
+        main_entry = AuditLogEntry(
+            user_email=None,
+            ip_address=context.client_ip,
+            user_agent=context.user_agent,
+            event_category=EventCategory.AUTHENTICATION,
+            event_type="m2m_token_failure",
+            action=Action.LOGIN,
+            outcome=EventOutcome.FAILURE,
+            error_message=f"M2M authentication failed: {str(e)}",
+            metadata={"client_id": client_id, "grant_type": grant_type},
+        )
+        log_id = await audit.log(main_entry)
+
+        auth_entry = AuthAuditEntry(
+            email=None,
+            auth_method="client_credentials",
+            event_type="m2m_token_failure",
+            ip_address=context.client_ip,
+            user_agent=context.user_agent,
+            failed_attempts_count=1,
+        )
+        await audit.log_auth(log_id, auth_entry)
+
+        raise HTTPException(
+            status_code=500,
+            detail="M2M authentication failed",
         )
 
 
@@ -333,3 +476,174 @@ async def logout(
         await audit.log_auth(log_id, auth_entry)
 
         raise HTTPException(status_code=500, detail="Logout failed")
+
+
+# ========================================
+#       M2M Client Management Endpoints
+# ========================================
+
+
+@router.post("/clients", response_model=M2MClientCreated)
+async def create_m2m_client(
+    client_data: M2MClientCreate,
+    current_user: CurrentUserDep,
+    db: DatabaseDep,
+    settings: SettingsDep,
+    audit: AuditServiceDep,
+    context: RequestContextDep,
+):
+    """
+    Create a new M2M client for programmatic API access.
+
+    The client_secret is generated and returned ONLY ONCE. Store it securely.
+    The client inherits permissions from the service_account_user_id if provided,
+    otherwise from the current authenticated user.
+
+    Requires: Authenticated user
+
+    Args:
+        client_data: Client creation request with name, description, etc.
+
+    Returns:
+        M2MClientCreated with client_id and client_secret (shown only once)
+    """
+    try:
+        # Generate client secret
+        client_secret = generate_client_secret()
+        client_secret_hash = hash_client_secret(client_secret)
+
+        # Determine which user account this client will represent
+        service_account_user_id = client_data.service_account_user_id
+        if not service_account_user_id:
+            service_account_user_id = str(current_user.user_id)
+
+        # Calculate expiration if specified
+        expires_at = None
+        if client_data.expires_days:
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(days=client_data.expires_days)
+            ).isoformat()
+
+        # Create client in database
+        client_id = db.create_m2m_client(
+            client_name=client_data.client_name,
+            client_secret_hash=client_secret_hash,
+            owner_user_id=str(current_user.user_id),
+            description=client_data.description,
+            service_account_user_id=str(service_account_user_id),
+            scopes=client_data.scopes,
+            expires_at=expires_at,
+        )
+
+        # Log client creation
+        main_entry = AuditLogEntry(
+            user_id=str(current_user.user_id),
+            user_email=current_user.email,
+            ip_address=context.client_ip,
+            user_agent=context.user_agent,
+            session_id=context.session_id,
+            event_category=EventCategory.AUTHENTICATION,
+            event_type="m2m_client_created",
+            action=Action.CREATE,
+            outcome=EventOutcome.SUCCESS,
+            metadata={
+                "client_id": client_id,
+                "client_name": client_data.client_name,
+            },
+        )
+        await audit.log(main_entry)
+
+        return M2MClientCreated(
+            client_id=client_id,
+            client_name=client_data.client_name,
+            client_secret=client_secret,
+            description=client_data.description,
+            scopes=client_data.scopes,
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.fromisoformat(expires_at) if expires_at else None,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create M2M client: {str(e)}",
+        )
+
+
+@router.get("/clients", response_model=list[M2MClientInfo])
+async def list_m2m_clients(
+    current_user: CurrentUserDep,
+    db: DatabaseDep,
+):
+    """
+    List all M2M clients owned by the current user.
+
+    Requires: Authenticated user
+
+    Returns:
+        List of M2MClientInfo (without secrets)
+    """
+    try:
+        clients = db.list_m2m_clients_by_owner(str(current_user.user_id))
+        return clients
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list M2M clients: {str(e)}",
+        )
+
+
+@router.delete("/clients/{client_id}")
+async def revoke_m2m_client(
+    client_id: str,
+    current_user: CurrentUserDep,
+    db: DatabaseDep,
+    audit: AuditServiceDep,
+    context: RequestContextDep,
+):
+    """
+    Revoke (deactivate) an M2M client. The client will no longer be able to authenticate.
+
+    Only the owner of the client can revoke it.
+
+    Requires: Authenticated user (owner of the client)
+
+    Args:
+        client_id: UUID of the client to revoke
+
+    Returns:
+        Success message
+    """
+    try:
+        success = db.revoke_m2m_client(client_id, str(current_user.user_id))
+
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail="Client not found or you don't have permission to revoke it",
+            )
+
+        # Log client revocation
+        main_entry = AuditLogEntry(
+            user_id=str(current_user.user_id),
+            user_email=current_user.email,
+            ip_address=context.client_ip,
+            user_agent=context.user_agent,
+            session_id=context.session_id,
+            event_category=EventCategory.AUTHENTICATION,
+            event_type="m2m_client_revoked",
+            action=Action.DELETE,
+            outcome=EventOutcome.SUCCESS,
+            metadata={"client_id": client_id},
+        )
+        await audit.log(main_entry)
+
+        return {"message": "Client revoked successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to revoke M2M client: {str(e)}",
+        )

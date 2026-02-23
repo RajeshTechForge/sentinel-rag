@@ -81,7 +81,7 @@ class DatabaseManager:
                 user_id = cur.fetchone()[0]
             conn.commit()
         return str(user_id)
-    
+
     def get_user_permission_level(self, user_id: str) -> Optional[str]:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
@@ -157,7 +157,7 @@ class DatabaseManager:
                     permission_level_id = res[0]
             conn.commit()
         return str(permission_level_id)
-    
+
     def get_all_permission_levels(self) -> List[str]:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
@@ -676,6 +676,153 @@ class DatabaseManager:
             }
             for row in rows
         ]
+
+    # ────────────────────────────────────────────
+    #      M2M Client Credentials Management
+    # ────────────────────────────────────────────
+
+    def create_m2m_client(
+        self,
+        client_name: str,
+        client_secret_hash: str,
+        owner_user_id: str,
+        description: Optional[str] = None,
+        service_account_user_id: Optional[str] = None,
+        scopes: Optional[List[str]] = None,
+        expires_at: Optional[str] = None,
+    ) -> str:
+        """Create a new M2M client for programmatic API access."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO m2m_clients 
+                    (client_name, client_secret_hash, owner_user_id, description, 
+                     service_account_user_id, scopes, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING client_id
+                    """,
+                    (
+                        client_name,
+                        client_secret_hash,
+                        owner_user_id,
+                        description,
+                        service_account_user_id,
+                        scopes,
+                        expires_at,
+                    ),
+                )
+                client_id = cur.fetchone()[0]
+            conn.commit()
+        return str(client_id)
+
+    def get_m2m_client_by_id(self, client_id: str) -> Optional[Dict]:
+        """Retrieve M2M client by client_id."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT client_id, client_name, client_secret_hash, description,
+                           owner_user_id, service_account_user_id, is_active, scopes,
+                           created_at, last_used_at, expires_at, metadata
+                    FROM m2m_clients
+                    WHERE client_id = %s
+                    """,
+                    (client_id,),
+                )
+                return cur.fetchone()
+
+    def get_m2m_client_with_user_info(self, client_id: str) -> Optional[Dict]:
+        """
+        Retrieve M2M client with associated user/service account information.
+        Returns user_id, email, role, department for authorization.
+        """
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT 
+                        m.client_id, m.client_name, m.client_secret_hash, m.is_active,
+                        m.scopes, m.expires_at,
+                        COALESCE(sa.user_id, owner.user_id) as user_id,
+                        COALESCE(sa.email, owner.email) as email,
+                        up.department_id, up.role_id,
+                        d.department_name, r.role_name
+                    FROM m2m_clients m
+                    LEFT JOIN users sa ON m.service_account_user_id = sa.user_id
+                    LEFT JOIN users owner ON m.owner_user_id = owner.user_id
+                    LEFT JOIN user_position up ON COALESCE(sa.user_id, owner.user_id) = up.user_id
+                    LEFT JOIN departments d ON up.department_id = d.department_id
+                    LEFT JOIN roles r ON up.role_id = r.role_id
+                    WHERE m.client_id = %s
+                    LIMIT 1
+                    """,
+                    (client_id,),
+                )
+                return cur.fetchone()
+
+    def update_m2m_client_last_used(self, client_id: str):
+        """Update the last_used_at timestamp for a client."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE m2m_clients
+                    SET last_used_at = CURRENT_TIMESTAMP
+                    WHERE client_id = %s
+                    """,
+                    (client_id,),
+                )
+            conn.commit()
+
+    def list_m2m_clients_by_owner(self, owner_user_id: str) -> List[Dict]:
+        """List all M2M clients created by a specific owner."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT client_id, client_name, description, is_active, scopes,
+                           created_at, last_used_at, expires_at
+                    FROM m2m_clients
+                    WHERE owner_user_id = %s
+                    ORDER BY created_at DESC
+                    """,
+                    (owner_user_id,),
+                )
+                return cur.fetchall()
+
+    def revoke_m2m_client(self, client_id: str, owner_user_id: str) -> bool:
+        """Revoke (deactivate) an M2M client. Returns True if successful."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE m2m_clients
+                    SET is_active = FALSE
+                    WHERE client_id = %s AND owner_user_id = %s
+                    RETURNING client_id
+                    """,
+                    (client_id, owner_user_id),
+                )
+                result = cur.fetchone()
+            conn.commit()
+        return result is not None
+
+    def delete_m2m_client(self, client_id: str, owner_user_id: str) -> bool:
+        """Permanently delete an M2M client. Returns True if successful."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM m2m_clients
+                    WHERE client_id = %s AND owner_user_id = %s
+                    RETURNING client_id
+                    """,
+                    (client_id, owner_user_id),
+                )
+                result = cur.fetchone()
+            conn.commit()
+        return result is not None
 
     def close(self):
         """Close the connection pool."""
