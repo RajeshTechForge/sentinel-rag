@@ -27,15 +27,15 @@ class RbacManager:
 
     def get_user_access_filters(self, user_id: str) -> List[Tuple[str, str]]:
         """Get allowed (department, classification) pairs for user."""
-        user_perms = self.db.get_user_role_and_department(user_id)
-        if not user_perms:
+        user_perm = self.db.get_user_role_and_department(user_id)
+        if not user_perm:
             return []
 
         allowed = set()
-        for dept, role in user_perms:
-            classifications = self._role_permissions.get((dept, role), frozenset())
-            for cls in classifications:
-                allowed.add((dept, cls))
+        dept, role = user_perm
+        classifications = self._role_permissions.get((dept, role), frozenset())
+        for cls in classifications:
+            allowed.add((dept, cls))
 
         return list(allowed)
 

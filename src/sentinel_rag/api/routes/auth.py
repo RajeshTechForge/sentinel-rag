@@ -320,15 +320,15 @@ async def auth_callback(
             )
 
         user_id = str(user["user_id"])
-        role_dept_list = db.get_user_role_and_department(user_id)
+        role_dept = db.get_user_role_and_department(user_id)
 
-        if not role_dept_list:
+        if not role_dept:
             raise HTTPException(
                 status_code=403,
                 detail="User has no assigned role. Please contact administrator.",
             )
 
-        department, role = role_dept_list[0]
+        department, role = role_dept
 
         access_token_expires = timedelta(
             minutes=settings.security.access_token_expire_minutes

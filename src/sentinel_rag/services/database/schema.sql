@@ -37,15 +37,9 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     full_name VARCHAR(100),
     permission_level_id UUID REFERENCES permission_levels(permission_level_id),
+    department_id UUID REFERENCES departments(department_id) ON DELETE SET NULL,
+    role_id UUID REFERENCES roles(role_id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS user_position (
-    user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
-    department_id UUID REFERENCES departments(department_id) ON DELETE CASCADE,
-    role_id UUID REFERENCES roles(role_id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, department_id, role_id)
 );
 
 -- ======================================================
@@ -110,6 +104,8 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_parent_id ON document_chunks(pare
 CREATE INDEX IF NOT EXISTS idx_document_chunks_type ON document_chunks(chunk_type);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_roles_department_id ON roles(department_id);
+CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id);
+CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
 CREATE INDEX IF NOT EXISTS idx_m2m_clients_owner ON m2m_clients(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_m2m_clients_service_account ON m2m_clients(service_account_user_id);
 CREATE INDEX IF NOT EXISTS idx_m2m_clients_active ON m2m_clients(is_active) WHERE is_active = TRUE;
