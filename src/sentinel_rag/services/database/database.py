@@ -76,8 +76,8 @@ class DatabaseManager:
         email: str,
         full_name: str,
         permission_level_id: str,
-        department_id: Optional[str] = None,
-        role_id: Optional[str] = None,
+        department_id: Optional[str],
+        role_id: Optional[str],
     ) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
@@ -141,6 +141,21 @@ class DatabaseManager:
                     (user_id,),
                 )
                 return cur.fetchall()
+
+    def get_role_dept_id_by_name(self, role_name: str, department_name: str) -> Optional[tuple]:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT r.role_id, d.department_id
+                    FROM roles r
+                    JOIN departments d ON r.department_id = d.department_id
+                    WHERE r.role_name = %s AND d.department_name = %s
+                    """,
+                    (role_name, department_name),
+                )
+                res = cur.fetchone()
+                return res if res else None
 
     # ─────────────────────────────────────────────
     #             RBAC Management

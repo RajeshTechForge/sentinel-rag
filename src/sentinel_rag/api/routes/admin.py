@@ -109,29 +109,29 @@ async def create_user(
 
     try:
         permission_level_id = db.create_permission_level(user_data.user_type)
+        res = db.get_role_dept_id_by_name(
+            user_data.user_role, user_data.user_department
+        )
+        if not res:
+            raise ValueError(
+                f"Role '{user_data.user_role}' not found in department '{user_data.user_department}'"
+            )
 
         user_id = db.create_user(
             email=user_data.user_email,
             full_name=user_data.user_full_name,
             permission_level_id=permission_level_id,
+            department_id=res[1],
+            role_id=res[0],
         )
-
-        db.assign_role(
-            user_id=user_id,
-            role_name=user_data.user_role,
-            department_name=user_data.user_department,
-        )
-
-        created_user = db.get_user_by_email(user_data.user_email)
 
         return UserDetailResponse(
-            user_id=created_user["user_id"],
-            user_email=created_user["email"],
-            user_full_name=created_user["full_name"],
+            user_id=user_id,
+            user_email=user_data.user_email,
+            user_full_name=user_data.user_full_name,
             user_role=user_data.user_role,
             user_department=user_data.user_department,
             permission_level=user_data.user_type,
-            created_at=created_user.get("created_at"),
         )
 
     except ValueError as e:
