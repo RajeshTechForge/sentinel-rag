@@ -298,21 +298,51 @@ def handle_create_user(db: DatabaseManager) -> None:
         print_info(f"Choose from: {', '.join(available_roles)}")
         return
 
+    # Get permission level
+    available_permission_levels = db.get_all_permission_levels()
+    if not available_permission_levels:
+        print_error("No permission levels found. Please run seeder first.")
+        return
+
+    print_info(f"Available permission levels: {', '.join(available_permission_levels)}")
+    permission_level = (
+        print_prompt("Permission level (default: user):").lower() or "user"
+    )
+
+    if permission_level not in available_permission_levels:
+        print_error(
+            "Invalid permission level",
+            f"Permission level '{permission_level}' is not available.",
+        )
+        print_info(f"Choose from: {', '.join(available_permission_levels)}")
+        return
+
     # Confirm creation
     print_divider()
     print_info("Creating user with the following details:")
     print(f"{Colors.DIM}  Email: {email}")
     print(f"  Name: {name}")
+    print(f"  Permission Level: {permission_level}")
     print(f"  Department: {department}")
     print(f"  Role: {role}{Colors.RESET}")
     print_divider()
 
+    # Create permission level if not exists and get ID
+    permission_level_id = db.create_permission_level(permission_level)
+    res = db.get_role_dept_id_by_name(role, department)
+    if not res:
+        print_error(
+            "Role or department not found during user creation",
+            f"Role '{role}' in department '{department}' does not exist.",
+        )
+        return
+
     # Create user
-    uid = db.create_user(email, name)
-    db.assign_role(uid, role, department)
+    uid = db.create_user(email, name, permission_level_id, res[1], res[0])
 
     print_success("User created successfully!")
     print(f"{Colors.GREEN}  User ID: {uid}")
+    print(f"  Permission Level: {permission_level}")
     print(f"  Role '{role}' assigned in department '{department}'{Colors.RESET}")
 
 

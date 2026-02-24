@@ -71,12 +71,19 @@ class DatabaseManager:
     # ─────────────────────────────────────────────
     #              User Management
     # ─────────────────────────────────────────────
-    def create_user(self, email: str, full_name: str, permission_level_id: str) -> str:
+    def create_user(
+        self,
+        email: str,
+        full_name: str,
+        permission_level_id: str,
+        department_id: Optional[str],
+        role_id: Optional[str],
+    ) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO users (email, full_name, permission_level_id) VALUES (%s, %s, %s) RETURNING user_id",
-                    (email, full_name, permission_level_id),
+                    "INSERT INTO users (email, full_name, permission_level_id, department_id, role_id) VALUES (%s, %s, %s, %s, %s) RETURNING user_id",
+                    (email, full_name, permission_level_id, department_id, role_id),
                 )
                 user_id = cur.fetchone()[0]
             conn.commit()
@@ -103,20 +110,21 @@ class DatabaseManager:
                 cur.execute("SELECT * FROM users WHERE email = %s", (email,))
                 return cur.fetchone()
 
-    def get_user_role_and_department(self, user_id: str) -> List[tuple]:
+    def get_user_role_and_department(self, user_id: str) -> Optional[tuple]:
+        """Return (department_name, role_name) for a user or None if not assigned."""
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
                     SELECT d.department_name, r.role_name
-                    FROM user_position ua
-                    JOIN roles r ON ua.role_id = r.role_id
-                    JOIN departments d ON ua.department_id = d.department_id
-                    WHERE ua.user_id = %s
+                    FROM users u
+                    LEFT JOIN departments d ON u.department_id = d.department_id
+                    LEFT JOIN roles r ON u.role_id = r.role_id
+                    WHERE u.user_id = %s
                     """,
                     (user_id,),
                 )
-                return cur.fetchall()
+                return cur.fetchone()
 
     def get_document_uploads_by_user(self, user_id: str) -> List[Dict]:
         with self._get_connection() as conn:
@@ -133,6 +141,21 @@ class DatabaseManager:
                     (user_id,),
                 )
                 return cur.fetchall()
+
+    def get_role_dept_id_by_name(self, role_name: str, department_name: str) -> Optional[tuple]:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT r.role_id, d.department_id
+                    FROM roles r
+                    JOIN departments d ON r.department_id = d.department_id
+                    WHERE r.role_name = %s AND d.department_name = %s
+                    """,
+                    (role_name, department_name),
+                )
+                res = cur.fetchone()
+                return res if res else None
 
     # ─────────────────────────────────────────────
     #             RBAC Management
@@ -267,19 +290,21 @@ class DatabaseManager:
                 cur.execute("SELECT department_name FROM departments")
                 return [row[0] for row in cur.fetchall()]
 
-    def get_user_department(self, user_id: str) -> List[str]:
+    def get_user_department(self, user_id: str) -> Optional[str]:
+        """Return the department name for a user or None if not assigned."""
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT DISTINCT d.department_name 
-                    FROM departments d 
-                    JOIN user_position ua ON d.department_id = ua.department_id 
-                    WHERE ua.user_id = %s
+                    SELECT d.department_name 
+                    FROM users u
+                    LEFT JOIN departments d ON u.department_id = d.department_id
+                    WHERE u.user_id = %s
                     """,
                     (user_id,),
                 )
-                return [row[0] for row in cur.fetchall()]
+                result = cur.fetchone()
+                return result[0] if result else None
 
     def get_department_id_by_name(self, department_name: str) -> Optional[str]:
         with self._get_connection() as conn:
@@ -349,33 +374,6 @@ class DatabaseManager:
                     (department_name,),
                 )
                 return [row[0] for row in cur.fetchall()]
-
-    def assign_role(self, user_id: str, role_name: str, department_name: str):
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT r.role_id, d.department_id FROM roles r 
-                    JOIN departments d ON r.department_id = d.department_id
-                    WHERE r.role_name = %s AND d.department_name = %s
-                    """,
-                    (role_name, department_name),
-                )
-                res = cur.fetchone()
-                if not res:
-                    raise ValueError(
-                        f"Role {role_name} not found in department {department_name}"
-                    )
-                role_id, department_id = res
-
-                cur.execute(
-                    """
-                    INSERT INTO user_position (user_id, department_id, role_id) 
-                    VALUES (%s, %s, %s) ON CONFLICT DO NOTHING
-                    """,
-                    (user_id, department_id, role_id),
-                )
-            conn.commit()
 
     # ─────────────────────────────────────────────
     #          Document Metadata Management
@@ -746,14 +744,14 @@ class DatabaseManager:
                         m.scopes, m.expires_at,
                         COALESCE(sa.user_id, owner.user_id) as user_id,
                         COALESCE(sa.email, owner.email) as email,
-                        up.department_id, up.role_id,
+                        COALESCE(sa.department_id, owner.department_id) as department_id,
+                        COALESCE(sa.role_id, owner.role_id) as role_id,
                         d.department_name, r.role_name
                     FROM m2m_clients m
                     LEFT JOIN users sa ON m.service_account_user_id = sa.user_id
                     LEFT JOIN users owner ON m.owner_user_id = owner.user_id
-                    LEFT JOIN user_position up ON COALESCE(sa.user_id, owner.user_id) = up.user_id
-                    LEFT JOIN departments d ON up.department_id = d.department_id
-                    LEFT JOIN roles r ON up.role_id = r.role_id
+                    LEFT JOIN departments d ON COALESCE(sa.department_id, owner.department_id) = d.department_id
+                    LEFT JOIN roles r ON COALESCE(sa.role_id, owner.role_id) = r.role_id
                     WHERE m.client_id = %s
                     LIMIT 1
                     """,
