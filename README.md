@@ -42,13 +42,10 @@ Most RAG implementations treat your knowledge base as a flat file system. When a
 - 🎯 **Industrial-Grade Rag Precision:** From advanced embeddings (_docs-to-markdown_ and _Context-Aware Hierarchical Splitting_) to _hybrid retrieval(vector + keyword)_ ensure precise context retrieval.
 
 
-## 📸 App Screenshorts
+## 📸 Screenshorts
+<img width="1920" height="936" alt="Screenshot From 2026-02-25 16-02-39" src="https://github.com/user-attachments/assets/88f80085-489e-42db-8ee4-bac7f2291a22" />
 
-<img width="1855" height="1093" alt="application_screenshort_1" src="https://github.com/user-attachments/assets/27f5d620-c497-476f-899a-41f9af089563" />
-<img width="1861" height="1093" alt="application_screenshort_2" src="https://github.com/user-attachments/assets/4d113585-aba4-4147-8a5d-0fe6977b4fec" />
-
-> These are the screenshots of the Steamlit Demo App
-
+> This is developer cli interface for testing. Admin cli tool is comming soon..
 
 ## 🚀 Getting Started
 
@@ -88,6 +85,7 @@ Ensure you have:
 - **Qdrant** running locally (via Docker)
 
 ```bash
+# use sudo for linux
 docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_data:/qdrant/storage qdrant/qdrant
 
 ```
